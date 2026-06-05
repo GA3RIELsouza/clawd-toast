@@ -7,7 +7,7 @@ public static class FileExtensions
     public static IEnumerable<string> ReadLinesBackward(string filePath, Encoding encoding)
     {
         using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        long position = fs.Length;
+        var position = fs.Length;
 
         var lineBytes = new List<byte>();
 
