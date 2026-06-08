@@ -22,7 +22,7 @@ public static class FileExtensions
                 if (lineBytes.Count > 0)
                 {
                     lineBytes.Reverse();
-                    yield return encoding.GetString(lineBytes.ToArray()).TrimEnd('\r');
+                    yield return encoding.GetString([.. lineBytes]).TrimEnd('\r');
                     lineBytes.Clear();
                 }
             }

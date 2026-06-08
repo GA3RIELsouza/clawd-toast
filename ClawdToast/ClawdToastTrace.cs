@@ -15,7 +15,7 @@ internal static class ClawdToastTrace
     {
         var logPath = Path.Combine(
             Path.GetDirectoryName(Environment.ProcessPath)!,
-            "clawd-toast.log"
+            "clawd-toast.debug.log"
         );
         Trace.Listeners.Add(new TextWriterTraceListener(logPath));
         Debug.IndentSize = 4;

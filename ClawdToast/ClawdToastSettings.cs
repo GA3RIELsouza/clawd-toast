@@ -28,9 +28,10 @@ internal class ClawdToastSettings
                     ClawdToastSettingsJsonSerializerContext.Default.ClawdToastSettings)
                          ?? new ClawdToastSettings();
             }
-            catch
+            catch (Exception ex)
             {
                 Debug.WriteLine("Failed to read settings, using default values.");
+                Debug.WriteLine(ex.Message);
             }
         }
         else

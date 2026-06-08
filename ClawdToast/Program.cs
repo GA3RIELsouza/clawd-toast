@@ -5,6 +5,11 @@ using System.Text.Json;
 using Windows.Data.Xml.Dom;
 using Windows.UI.Notifications;
 
+const int MaxLoopRetries = 5;
+const int LoopRetryDelayMs = 200;
+
+var startDateTimeUtc = DateTime.UtcNow;
+
 ClawdToastAppRegistry.Initialize();
 ClawdToastTrace.Initialize();
 var settings = ClawdToastSettings.Initialize();
@@ -22,55 +27,102 @@ try
         return;
     }
 
-    TimeSpan duration;
+    var duration = TimeSpan.MaxValue;
+
+    HookInput hookInput;
 
     try
     {
-        var hookInput = JsonSerializer.Deserialize(raw, HookInputJsonSerializerContext.Default.HookInput);
+        hookInput = JsonSerializer.Deserialize(raw, HookInputJsonSerializerContext.Default.HookInput)!;
         if (hookInput is null)
         {
             Debug.WriteLine("Failed to deserialize input JSON.");
             return;
         }
-
-        const int MaxTries = 5;
-        var retryCounter = 0;
-
-        TranscriptEntry? lastTurnEntry = default;
-
-        for (;;)
-        {
-            lastTurnEntry = FileExtensions.ReadLinesBackward(hookInput.TranscriptPath, Encoding.UTF8)
-                .Where(line => !string.IsNullOrWhiteSpace(line))
-                .Select(line => JsonSerializer.Deserialize(line, TranscriptEntryJsonSerializerContext.Default.TranscriptEntry))
-                .FirstOrDefault(entry => entry is { Subtype: "turn_duration" or "stop_hook_summary" });
-
-            if (lastTurnEntry is { Subtype: "stop_hook_summary" } or null)
-            {
-                if ((++retryCounter) >= MaxTries)
-                {
-                    Debug.WriteLine("Couldn't find the turn_duration subtype entry after {0} tries. The toast will not be shown.", DateTime.Now);
-                    return;
-                }
-                else
-                {
-                    Debug.WriteLine("Retry to find the turn_duration subtype number {0}.", retryCounter);
-                }
-
-                Task.Delay(100).GetAwaiter().GetResult();
-            }
-            else
-            {
-                break;
-            }
-        }
-
-        duration = TimeSpan.FromMilliseconds((double)(lastTurnEntry.DurationMs ?? 0));
     }
     catch (Exception ex)
     {
         Debug.WriteLine("Failed to parse input JSON.");
         Debug.WriteLine(ex.ToString());
+        return;
+    }
+
+    TranscriptEntry? lastTurnEntry = default;
+    var lastTurnEntryRetryCounter = 0;
+    for (;;)
+    {
+        lastTurnEntry = FileExtensions.ReadLinesBackward(hookInput.TranscriptPath, Encoding.UTF8)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => JsonSerializer.Deserialize(line, TranscriptEntryJsonSerializerContext.Default.TranscriptEntry))
+            .FirstOrDefault(entry => entry is { Subtype: "turn_duration" or "stop_hook_summary" });
+
+        if (lastTurnEntry is { Subtype: "stop_hook_summary" } or null)
+        {
+            if ((++lastTurnEntryRetryCounter) >= MaxLoopRetries)
+            {
+                Debug.WriteLine("Couldn't find the turn_duration subtype entry after {0} tries. The toast will be shown with no turn duration information.", lastTurnEntryRetryCounter);
+                duration = TimeSpan.MinValue;
+                break;
+            }
+            else
+            {
+                Debug.WriteLine("Retry to find the turn_duration subtype number {0}.", lastTurnEntryRetryCounter);
+            }
+
+            Thread.Sleep(LoopRetryDelayMs);
+        }
+        else
+        {
+            if (lastTurnEntry.Timestamp is null)
+            {
+                break;
+            }
+
+            var diff = startDateTimeUtc - lastTurnEntry.Timestamp.Value;
+            var diffInSecs = diff.TotalSeconds;
+
+            // Created as ClawdToast started or after
+            if (diffInSecs <= 0)
+            {
+                break;
+            }
+
+            // Created more than 3 seconds before ClawdToast even started,
+            // most likely not the latest message
+            if (diffInSecs > 3)
+            {
+                if ((++lastTurnEntryRetryCounter) >= MaxLoopRetries)
+                {
+                    Debug.WriteLine("Couldn't find the turn_duration subtype entry after {0} tries. The toast will be shown with no turn duration information.", lastTurnEntryRetryCounter);
+                    duration = TimeSpan.MinValue;
+                    break;
+                }
+                else
+                {
+                    Debug.WriteLine("Retry to find the turn_duration subtype number {0}.", lastTurnEntryRetryCounter);
+                }
+
+                Thread.Sleep(LoopRetryDelayMs);
+            }
+
+            break;
+        }
+    }
+
+    if (duration != TimeSpan.MinValue)
+    {
+        if (lastTurnEntry?.DurationMs is not null)
+        {
+            duration = TimeSpan.FromMilliseconds((double)lastTurnEntry.DurationMs);
+        }
+        else
+        {
+            duration = TimeSpan.MinValue;
+        }
+    }
+
+    if (duration.TotalMinutes < settings.MinDurationMinutes)
+    {
         return;
     }
 
@@ -111,6 +163,11 @@ finally
 
 static string GetDurationString(TimeSpan duration)
 {
+    if (duration == TimeSpan.MinValue)
+    {
+        return "um tempo indeterminado";
+    }
+
     var parts = new List<string>(3);
 
     switch (duration.Hours)
