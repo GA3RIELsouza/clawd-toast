@@ -1,219 +1,134 @@
-using ClawdToast;
+using ClawdToast.Configurations;
+using ClawdToast.Contexts;
+using ClawdToast.Entities;
+using ClawdToast.Extensions;
+using ClawdToast.Helpers;
+using ClawdToast.Visitors;
 using System.Diagnostics;
-using System.Text;
 using System.Text.Json;
 using Windows.Data.Xml.Dom;
 using Windows.UI.Notifications;
 
-const int MaxLoopRetries = 5;
-const int LoopRetryDelayMs = 200;
+var startTimeUtc = Process.GetCurrentProcess().StartTime.ToUniversalTime();
 
-var startDateTimeUtc = DateTime.UtcNow;
-
-ClawdToastAppRegistry.Initialize();
-ClawdToastTrace.Initialize();
+CultureInfoConfiguration.Initialize();
+ClawdToastAppRegistryConfiguration.Initialize();
+ClawdToastTraceConfiguration.Initialize();
 var settings = ClawdToastSettings.Initialize();
+
+Thread.Sleep(500);
 
 try
 {
-    Debug.WriteLine("Starting Clawd Toast at {0}.", DateTime.Now);
-    Debug.Indent();
+    Trace.WriteLine($"Starting Clawd Toast at {DateTime.Now}.");
+    Trace.Indent();
 
-    var raw = Console.In.ReadToEnd();
-
-    if (string.IsNullOrWhiteSpace(raw))
-    {
-        Debug.WriteLine("No input received.");
-        return;
-    }
-
-    var duration = TimeSpan.MaxValue;
-
-    HookInput hookInput;
+    BaseHookInput? hookInput;
+    var hookInputVisitor = new HookInputVisitor(settings, startTimeUtc);
 
     try
     {
-        hookInput = JsonSerializer.Deserialize(raw, HookInputJsonSerializerContext.Default.HookInput)!;
+#if DEBUG
+        var raw = Console.In.ReadToEnd();
+        Debug.WriteLine(raw);
+        hookInput = JsonSerializer.Deserialize(raw, HookInputJsonSerializerContext.Default.BaseHookInput);
+#else
+        using var stream = Console.OpenStandardInput();
+        hookInput = JsonSerializer.Deserialize(stream, HookInputJsonSerializerContext.Default.BaseHookInput);
+#endif
+
         if (hookInput is null)
         {
-            Debug.WriteLine("Failed to deserialize input JSON.");
+            Trace.WriteLine("Failed to deserialize input JSON.");
             return;
         }
+
+        Debug.WriteLine(JsonSerializer.Serialize(hookInput, HookInputJsonSerializerContext.Default.BaseHookInput));
     }
     catch (Exception ex)
     {
-        Debug.WriteLine("Failed to parse input JSON.");
-        Debug.WriteLine(ex.ToString());
+        Trace.WriteLine($"Failed to deserialize input JSON, exception thrown: {ex.Message}.");
         return;
     }
 
-    TranscriptEntry? lastTurnEntry = default;
-    var lastTurnEntryRetryCounter = 0;
-    for (;;)
-    {
-        lastTurnEntry = FileExtensions.ReadLinesBackward(hookInput.TranscriptPath, Encoding.UTF8)
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .Select(line => JsonSerializer.Deserialize(line, TranscriptEntryJsonSerializerContext.Default.TranscriptEntry))
-            .FirstOrDefault(entry => entry is { Subtype: "turn_duration" or "stop_hook_summary" });
+    var shouldShowToast = hookInput.Apply(hookInputVisitor, out var duration);
 
-        if (lastTurnEntry is { Subtype: "stop_hook_summary" } or null)
-        {
-            if ((++lastTurnEntryRetryCounter) >= MaxLoopRetries)
-            {
-                Debug.WriteLine("Couldn't find the turn_duration subtype entry after {0} tries. The toast will be shown with no turn duration information.", lastTurnEntryRetryCounter);
-                duration = TimeSpan.MinValue;
-                break;
-            }
-            else
-            {
-                Debug.WriteLine("Retry to find the turn_duration subtype number {0}.", lastTurnEntryRetryCounter);
-            }
-
-            Thread.Sleep(LoopRetryDelayMs);
-        }
-        else
-        {
-            if (lastTurnEntry.Timestamp is null)
-            {
-                break;
-            }
-
-            var diff = startDateTimeUtc - lastTurnEntry.Timestamp.Value;
-            var diffInSecs = diff.TotalSeconds;
-
-            // Created as ClawdToast started or after
-            if (diffInSecs <= 0)
-            {
-                break;
-            }
-
-            // Created more than 3 seconds before ClawdToast even started,
-            // most likely not the latest message
-            if (diffInSecs > 3)
-            {
-                if ((++lastTurnEntryRetryCounter) >= MaxLoopRetries)
-                {
-                    Debug.WriteLine("Couldn't find the turn_duration subtype entry after {0} tries. The toast will be shown with no turn duration information.", lastTurnEntryRetryCounter);
-                    duration = TimeSpan.MinValue;
-                    break;
-                }
-                else
-                {
-                    Debug.WriteLine("Retry to find the turn_duration subtype number {0}.", lastTurnEntryRetryCounter);
-                }
-
-                Thread.Sleep(LoopRetryDelayMs);
-            }
-
-            break;
-        }
-    }
-
-    if (duration != TimeSpan.MinValue)
-    {
-        if (lastTurnEntry?.DurationMs is not null)
-        {
-            duration = TimeSpan.FromMilliseconds((double)lastTurnEntry.DurationMs);
-        }
-        else
-        {
-            duration = TimeSpan.MinValue;
-        }
-    }
-
-    if (duration.TotalMinutes < settings.MinDurationMinutes)
+    if (!shouldShowToast)
     {
         return;
     }
 
-    var durationStr = GetDurationString(duration);
+    var durationStr = duration.GetDurationString();
 
     var xml =
 $"""
-<toast duration="long">
-    <visual>
-        <binding template="ToastGeneric">
-            <text>O Claude respondeu após {durationStr}, confira seu Claude Code.</text>
-        </binding>
-    </visual>
-    <commands scenario="alarm">
-        <command id="dismiss" />
-    </commands>
-</toast>
-""";
+    <toast duration="long">
+        <visual>
+            <binding template="ToastGeneric">
+                <text>O Claude respondeu após {durationStr}, confira seu Claude Code.</text>
+            </binding>
+        </visual>
+        <commands scenario="alarm">
+            <command id="dismiss" />
+        </commands>
+    </toast>
+    """;
 
     var doc = new XmlDocument();
     doc.LoadXml(xml);
 
     var toast = new ToastNotification(doc);
-    ToastNotificationManager.CreateToastNotifier(ClawdToastAppRegistry.AppId).Show(toast);
+    using var waitHandle = new ManualResetEventSlim(false);
+
+    toast.Activated += (sender, args) =>
+    {
+        Trace.WriteLine($"Toast callback called with arguments: {args}.");
+
+        if (FocusHelper.TryFocusTerminalWindow())
+        {
+            Trace.WriteLine("Focused exact terminal via parent.");
+        }
+        else
+        {
+            Trace.WriteLine("Could not attach to a parent console with a visible window.");
+        }
+
+        waitHandle.Set();
+    };
+
+    toast.Dismissed += (sender, args) =>
+    {
+        switch (args.Reason)
+        {
+            case ToastDismissalReason.TimedOut:
+                Trace.WriteLine("The toast went away by itself (timed out).");
+                break;
+
+            case ToastDismissalReason.UserCanceled:
+                Trace.WriteLine("The user swiped the toast away or clicked the close button.");
+                break;
+
+            case ToastDismissalReason.ApplicationHidden:
+                Trace.WriteLine("The app explicitly hid the toast, or it was cleared by the system.");
+                break;
+        }
+
+        waitHandle.Set();
+    };
+
+    ToastNotificationManager.CreateToastNotifier(ClawdToastAppRegistryConfiguration.AppId).Show(toast);
+
+    waitHandle.Wait();
 }
 catch (Exception ex)
 {
-    Debug.WriteLine("An error occurred while processing the hook input or showing the toast.");
-    Debug.WriteLine(ex.Message);
+    Trace.WriteLine("An error occurred while processing the hook input or showing the toast.");
+    Trace.WriteLine(ex.Message);
 }
 finally
 {
-    Debug.Unindent();
-    Debug.WriteLine("Ending Clawd Toast at {0}.", DateTime.Now);
-    Debug.WriteLine("---");
+    Trace.Unindent();
+    Trace.WriteLine($"Ending Clawd Toast at {DateTime.Now}.");
+    Trace.WriteLine("---");
     Trace.Flush();
-}
-
-static string GetDurationString(TimeSpan duration)
-{
-    if (duration == TimeSpan.MinValue)
-    {
-        return "um tempo indeterminado";
-    }
-
-    var parts = new List<string>(3);
-
-    switch (duration.Hours)
-    {
-        case 1:
-            parts.Add("1 hora");
-            break;
-
-        case > 1:
-            parts.Add($"{duration.Hours} horas");
-            break;
-
-        default: break;
-    }
-
-    switch (duration.Minutes)
-    {
-        case 1:
-            parts.Add("1 minuto");
-            break;
-
-        case > 1:
-            parts.Add($"{duration.Minutes} minutos");
-            break;
-
-        default: break;
-    }
-
-    switch (duration.Seconds)
-    {
-        case 1:
-            parts.Add("1 segundo");
-            break;
-
-        case > 1:
-            parts.Add($"{duration.Seconds} segundos");
-            break;
-
-        default: break;
-    }
-
-    if (parts.Count == 0) return "0 segundos";
-    if (parts.Count == 1) return parts[0];
-
-    var lastPart = parts[^1];
-    parts.RemoveAt(parts.Count - 1);
-
-    return $"{string.Join(", ", parts)} e {lastPart}";
 }

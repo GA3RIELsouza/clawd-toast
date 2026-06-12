@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace ClawdToast;
+namespace ClawdToast.Extensions;
 
 public static class FileExtensions
 {

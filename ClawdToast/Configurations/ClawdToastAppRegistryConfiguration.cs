@@ -1,9 +1,9 @@
 ﻿using Microsoft.Win32;
 using System.Reflection;
 
-namespace ClawdToast;
+namespace ClawdToast.Configurations;
 
-internal static class ClawdToastAppRegistry
+internal static class ClawdToastAppRegistryConfiguration
 {
     internal const string AppId = $"GA3RIELsouza.ClawdToast";
     internal const string DisplayName = "Clawd Toast";
