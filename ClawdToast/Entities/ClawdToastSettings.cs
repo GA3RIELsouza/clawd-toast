@@ -17,6 +17,7 @@ internal class ClawdToastSettingsMinimumDuration
 internal class ClawdToastSettings
 {
     public required ClawdToastSettingsMinimumDuration MinimumDuration { get; set; } = new();
+    public string? CustomSound { get; set; }
 
     internal static ClawdToastSettings Initialize()
     {

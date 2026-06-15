@@ -1,8 +1,36 @@
-﻿namespace ClawdToast.Extensions;
+﻿using ClawdToast.Entities;
+using Windows.Data.Xml.Dom;
 
-internal static class TimeSpanExtensions
+namespace ClawdToast.Services;
+
+internal sealed class XmlService(TimeSpan Duration, ClawdToastSettings Settings)
 {
-    internal static string GetDurationString(this TimeSpan duration)
+    internal XmlDocument BuildXml()
+    {
+        var durationStr = GetDurationString(Duration);
+
+        var xmlStr =
+$"""
+<toast duration="long">
+    <visual>
+        <binding template="ToastGeneric">
+            <text>O Claude respondeu após {durationStr}, confira seu Claude Code.</text>
+        </binding>
+    </visual>
+    {(string.IsNullOrWhiteSpace(Settings.CustomSound) ? string.Empty : """<audio silent="true" />""")}
+    <commands scenario="alarm">
+        <command id="dismiss" />
+    </commands>
+</toast>
+""";
+
+        var xmlDocument = new XmlDocument();
+        xmlDocument.LoadXml(xmlStr);
+
+        return xmlDocument;
+    }
+
+    private static string GetDurationString(TimeSpan duration)
     {
         if (duration == TimeSpan.MinValue)
         {

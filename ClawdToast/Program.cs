@@ -1,13 +1,10 @@
 using ClawdToast.Configurations;
 using ClawdToast.Contexts;
 using ClawdToast.Entities;
-using ClawdToast.Extensions;
-using ClawdToast.Helpers;
+using ClawdToast.Services;
 using ClawdToast.Visitors;
 using System.Diagnostics;
 using System.Text.Json;
-using Windows.Data.Xml.Dom;
-using Windows.UI.Notifications;
 
 var startTimeUtc = Process.GetCurrentProcess().StartTime.ToUniversalTime();
 
@@ -15,6 +12,8 @@ CultureInfoConfiguration.Initialize();
 ClawdToastAppRegistryConfiguration.Initialize();
 ClawdToastTraceConfiguration.Initialize();
 var settings = ClawdToastSettings.Initialize();
+
+using var soundService = new SoundService(settings);
 
 Thread.Sleep(500);
 
@@ -28,7 +27,11 @@ try
 
     try
     {
-#if DEBUG
+#if DEBUG && DEBUG_EXAMPLE_DATA
+        var raw = File.ReadAllText("Debug/hook_input.json");
+        Debug.WriteLine(raw);
+        hookInput = JsonSerializer.Deserialize(raw, HookInputJsonSerializerContext.Default.BaseHookInput);
+#elif DEBUG
         var raw = Console.In.ReadToEnd();
         Debug.WriteLine(raw);
         hookInput = JsonSerializer.Deserialize(raw, HookInputJsonSerializerContext.Default.BaseHookInput);
@@ -40,7 +43,7 @@ try
         if (hookInput is null)
         {
             Trace.WriteLine("Failed to deserialize input JSON.");
-            return;
+            return 1;
         }
 
         Debug.WriteLine(JsonSerializer.Serialize(hookInput, HookInputJsonSerializerContext.Default.BaseHookInput));
@@ -48,77 +51,20 @@ try
     catch (Exception ex)
     {
         Trace.WriteLine($"Failed to deserialize input JSON, exception thrown: {ex.Message}.");
-        return;
+        return 1;
     }
 
     var shouldShowToast = hookInput.Apply(hookInputVisitor, out var duration);
 
     if (!shouldShowToast)
     {
-        return;
+        return 1;
     }
 
-    var durationStr = duration.GetDurationString();
+    var xmlService = new XmlService(duration, settings);
+    var toastService = new ToastService(xmlService, soundService);
 
-    var xml =
-$"""
-    <toast duration="long">
-        <visual>
-            <binding template="ToastGeneric">
-                <text>O Claude respondeu após {durationStr}, confira seu Claude Code.</text>
-            </binding>
-        </visual>
-        <commands scenario="alarm">
-            <command id="dismiss" />
-        </commands>
-    </toast>
-    """;
-
-    var doc = new XmlDocument();
-    doc.LoadXml(xml);
-
-    var toast = new ToastNotification(doc);
-    using var waitHandle = new ManualResetEventSlim(false);
-
-    toast.Activated += (sender, args) =>
-    {
-        Trace.WriteLine($"Toast callback called with arguments: {args}.");
-
-        if (FocusHelper.TryFocusTerminalWindow())
-        {
-            Trace.WriteLine("Focused exact terminal via parent.");
-        }
-        else
-        {
-            Trace.WriteLine("Could not attach to a parent console with a visible window.");
-        }
-
-        waitHandle.Set();
-    };
-
-    toast.Dismissed += (sender, args) =>
-    {
-        switch (args.Reason)
-        {
-            case ToastDismissalReason.TimedOut:
-                Trace.WriteLine("The toast went away by itself (timed out).");
-                break;
-
-            case ToastDismissalReason.UserCanceled:
-                Trace.WriteLine("The user swiped the toast away or clicked the close button.");
-                break;
-
-            case ToastDismissalReason.ApplicationHidden:
-                Trace.WriteLine("The app explicitly hid the toast, or it was cleared by the system.");
-                break;
-        }
-
-        waitHandle.Set();
-    };
-
-    ToastNotificationManager.CreateToastNotifier(ClawdToastAppRegistryConfiguration.AppId).Show(toast);
-
-    waitHandle.Wait();
+    toastService.ShowToast();
 }
 catch (Exception ex)
 {
@@ -132,3 +78,5 @@ finally
     Trace.WriteLine("---");
     Trace.Flush();
 }
+
+return 0;

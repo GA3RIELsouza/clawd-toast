@@ -1,10 +1,12 @@
 ﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace ClawdToast.Helpers;
+namespace ClawdToast.Services;
 
-public partial class FocusHelper
+public partial class FocusService
 {
+    private FocusService() { }
+
     private const int SW_RESTORE = 9;
 
     [StructLayout(LayoutKind.Sequential)]

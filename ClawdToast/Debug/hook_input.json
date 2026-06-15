@@ -1,0 +1,11 @@
+{
+  "session_id": "0c970cf3-2a86-4dd5-be74-32073c7622f7",
+  "transcript_path": ".\\Debug\\transcript.jsonl",
+  "cwd": "C:\\Users\\USUARIO",
+  "permission_mode": "default",
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "last_assistant_message": "Sou o Claude, sou muito maluquinho!",
+  "background_tasks": [],
+  "session_crons": []
+}

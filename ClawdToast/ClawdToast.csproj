@@ -18,10 +18,20 @@
 		<DebugType>none</DebugType>
 		<DebugSymbols>false</DebugSymbols>
 	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+	  <DefineConstants>$(DefineConstants);DEBUG_EXAMPLE_DATA</DefineConstants>
+	</PropertyGroup>
 	
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.2.0" />
-		
+
 		<EmbeddedResource Include="Assets/icon16.png" />
+	</ItemGroup>
+
+	<ItemGroup Condition="$(DefineConstants.Contains('DEBUG_EXAMPLE_DATA'))">
+		<Content Include="Debug\**">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
 	</ItemGroup>
 </Project>
