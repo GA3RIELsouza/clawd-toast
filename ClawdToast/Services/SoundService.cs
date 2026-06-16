@@ -63,7 +63,7 @@ internal sealed class SoundService : IDisposable
 
     private static bool TryGetRightPath(ClawdToastSettings settings, [NotNullWhen(true)] out string? path)
     {
-        if (string.IsNullOrWhiteSpace(settings.CustomSound))
+        if (!settings.HasCustomSound)
         {
             Trace.WriteLine("No custom sound set.");
             path = null;

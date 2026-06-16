@@ -1,13 +1,16 @@
 ﻿using ClawdToast.Visitors;
 using System.Text.Json.Serialization;
 
-namespace ClawdToast.Entities;
+namespace ClawdToast.Entities.HookInput;
 
 [JsonPolymorphic(
     TypeDiscriminatorPropertyName = "hook_event_name",
     IgnoreUnrecognizedTypeDiscriminators = true)]
 [JsonDerivedType(typeof(StopHookInput), "Stop")]
+[JsonDerivedType(typeof(PermissionRequestHookInput), "PermissionRequest")]
 internal abstract class BaseHookInput
 {
-    public abstract bool Apply(IHookInputVisitor visitor, out TimeSpan duration);
+    public string TranscriptPath { get; set; } = string.Empty;
+
+    public abstract T Apply<T>(IHookInputVisitor<T> visitor);
 }

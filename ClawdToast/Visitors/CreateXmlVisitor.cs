@@ -1,25 +1,60 @@
 ﻿using ClawdToast.Entities;
+using ClawdToast.Entities.HookInput;
 using Windows.Data.Xml.Dom;
 
-namespace ClawdToast.Services;
+namespace ClawdToast.Visitors;
 
-internal sealed class XmlService(TimeSpan Duration, ClawdToastSettings Settings)
+internal sealed class CreateXmlVisitor(TimeSpan Duration, ClawdToastSettings Settings) : IHookInputVisitor<XmlDocument>
 {
-    internal XmlDocument BuildXml()
+    public XmlDocument Visit(StopHookInput hookInput)
     {
         var durationStr = GetDurationString(Duration);
+
+        var customSoundStr = Settings.HasCustomSound
+            ? """<audio silent="true" />"""
+            : string.Empty;
 
         var xmlStr =
 $"""
 <toast duration="long">
     <visual>
         <binding template="ToastGeneric">
-            <text>O Claude respondeu após {durationStr}, confira seu Claude Code.</text>
+            <text hint-style="header">O Claude respondeu após {durationStr}.</text>
+            <text hint-style="body" hint-wrap="true">{hookInput.LastAssistantMessage}</text>
         </binding>
     </visual>
-    {(string.IsNullOrWhiteSpace(Settings.CustomSound) ? string.Empty : """<audio silent="true" />""")}
+    {customSoundStr}
     <commands scenario="alarm">
-        <command id="dismiss" />
+        <command id="dismiss" arguments="IGNORE" />
+    </commands>
+</toast>
+""";
+
+        var xmlDocument = new XmlDocument();
+        xmlDocument.LoadXml(xmlStr);
+
+        return xmlDocument;
+    }
+
+    public XmlDocument Visit(PermissionRequestHookInput hookInput)
+    {
+        var customSoundStr = Settings.HasCustomSound
+            ? """<audio silent="true" />"""
+            : string.Empty;
+
+        var xmlStr =
+$"""
+<toast duration="long">
+    <visual>
+        <binding template="ToastGeneric">
+            <text hint-style="header">O Claude solicitou permissões.</text>
+            <text hint-style="body">Comando: {hookInput.ToolName} {hookInput.ToolInput.Command}</text>
+            <text hint-style="captionSubtle">Descrição: {hookInput.ToolInput.Description}</text>
+        </binding>
+    </visual>
+    {customSoundStr}
+    <commands scenario="alarm">
+        <command id="dismiss" arguments="IGNORE" />
     </commands>
 </toast>
 """;

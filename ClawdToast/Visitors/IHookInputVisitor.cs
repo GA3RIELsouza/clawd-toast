@@ -1,8 +1,9 @@
-﻿using ClawdToast.Entities;
+﻿using ClawdToast.Entities.HookInput;
 
 namespace ClawdToast.Visitors;
 
-internal interface IHookInputVisitor
+internal interface IHookInputVisitor<T>
 {
-    bool Visit(StopHookInput hookInput, out TimeSpan duration);
+    T Visit(StopHookInput hookInput);
+    T Visit(PermissionRequestHookInput hookInput);
 }

@@ -19,6 +19,10 @@ internal class ClawdToastSettings
     public required ClawdToastSettingsMinimumDuration MinimumDuration { get; set; } = new();
     public string? CustomSound { get; set; }
 
+    [MemberNotNullWhen(true, nameof(CustomSound))]
+    [JsonIgnore]
+    public bool HasCustomSound => !string.IsNullOrWhiteSpace(CustomSound);
+
     internal static ClawdToastSettings Initialize()
     {
         const string SettingsFileName = "clawd-toast.settings.json";

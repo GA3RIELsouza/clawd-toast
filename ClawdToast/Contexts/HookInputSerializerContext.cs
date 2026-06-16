@@ -1,4 +1,4 @@
-﻿using ClawdToast.Entities;
+﻿using ClawdToast.Entities.HookInput;
 using System.Text.Json.Serialization;
 
 namespace ClawdToast.Contexts;

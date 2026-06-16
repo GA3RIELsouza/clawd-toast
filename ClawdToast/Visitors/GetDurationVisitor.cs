@@ -1,5 +1,6 @@
 ﻿using ClawdToast.Contexts;
 using ClawdToast.Entities;
+using ClawdToast.Entities.HookInput;
 using ClawdToast.Extensions;
 using System.Diagnostics;
 using System.Text;
@@ -7,14 +8,14 @@ using System.Text.Json;
 
 namespace ClawdToast.Visitors;
 
-internal sealed class HookInputVisitor(ClawdToastSettings Settings, DateTime StartTimeUtc) : IHookInputVisitor
+internal sealed class GetDurationVisitor(ClawdToastSettings Settings, DateTime StartTimeUtc) : IHookInputVisitor<TimeSpan?>
 {
     const int MaxLoopRetries = 5;
     const int LoopRetryDelayMs = 200;
 
-    public bool Visit(StopHookInput hookInput, out TimeSpan duration)
+    public TimeSpan? Visit(StopHookInput hookInput)
     {
-        duration = TimeSpan.MaxValue;
+        var duration = TimeSpan.MaxValue;
 
         TranscriptEntry? lastTurnEntry = default;
         var lastTurnEntryRetryCounter = 0;
@@ -90,6 +91,8 @@ internal sealed class HookInputVisitor(ClawdToastSettings Settings, DateTime Sta
             }
         }
 
-        return duration >= Settings.MinimumDuration.ToTimeSpan();
+        return duration >= Settings.MinimumDuration.ToTimeSpan() ? duration : null;
     }
+
+    public TimeSpan? Visit(PermissionRequestHookInput hookInput) => TimeSpan.MaxValue;
 }
