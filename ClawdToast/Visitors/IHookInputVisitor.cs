@@ -6,4 +6,5 @@ internal interface IHookInputVisitor<T>
 {
     T Visit(StopHookInput hookInput);
     T Visit(PermissionRequestHookInput hookInput);
+    T Visit(PreToolUseHookInput hookInput);
 }

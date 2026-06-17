@@ -15,8 +15,6 @@ internal static class ClawdToastAppRegistryConfiguration
         var tempPath = Path.GetTempPath();
         var iconUri = Path.Combine(tempPath, "ClawdToast.icon16.png");
 
-        Debug.WriteLine($"Icon URI: {iconUri}");
-
         if (!File.Exists(iconUri))
         {
             using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("ClawdToast.icon16.png");
@@ -34,6 +32,5 @@ internal static class ClawdToastAppRegistryConfiguration
         using var reg = Registry.CurrentUser.CreateSubKey(RegistryKey);
         reg.SetValue("DisplayName", DisplayName);
         reg.SetValue("IconUri", iconUri);
-        reg.SetValue("BackgroundColor", "#D97757");
     }
 }

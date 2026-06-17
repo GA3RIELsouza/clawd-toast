@@ -3,11 +3,17 @@ using System.Text.Json.Serialization;
 
 namespace ClawdToast.Entities.HookInput;
 
+#region ToolInput
+
 internal sealed class PermissionRequestHookInputToolInput
 {
     public string Command { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
 }
+
+#endregion
+
+#region PermissionSuggestion
 
 [JsonPolymorphic(
     TypeDiscriminatorPropertyName = "type",
@@ -29,7 +35,9 @@ internal sealed class PermissionRequestHookInputPermissionSuggestionSetMode : Pe
     public string Mode { get; set; } = string.Empty;
 }
 
-internal sealed class PermissionRequestHookInput : BaseHookInput
+#endregion
+
+internal class PermissionRequestHookInput : BaseHookInput
 {
     public string ToolName { get; set; } = string.Empty;
     public PermissionRequestHookInputToolInput ToolInput { get; set; } = new();

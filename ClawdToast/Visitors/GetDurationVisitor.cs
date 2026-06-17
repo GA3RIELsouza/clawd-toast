@@ -94,6 +94,23 @@ internal sealed class GetDurationVisitor(ClawdToastSettings Settings, DateTime S
         return duration >= Settings.MinimumDuration.ToTimeSpan() ? duration : null;
     }
 
-    public TimeSpan? Visit(PermissionRequestHookInput hookInput) => TimeSpan.MaxValue;
+    public TimeSpan? Visit(PermissionRequestHookInput hookInput)
+    {
         if (hookInput.ToolName is "AskUserQuestion")
+        {
+            return null;
+        }
+
+        return TimeSpan.MaxValue;
+    }
+
+    public TimeSpan? Visit(PreToolUseHookInput hookInput)
+    {
+        if (hookInput.ToolName is "AskUserQuestion")
+        {
+            return TimeSpan.MaxValue;
+        }
+
+        return null;
+    }
 }

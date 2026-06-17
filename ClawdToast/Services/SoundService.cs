@@ -78,22 +78,39 @@ internal sealed class SoundService : IDisposable
             return false;
         }
 
-        path = Path.Join(Environment.CurrentDirectory, settings.CustomSound);
-        if (File.Exists(path))
+        if (Path.IsPathFullyQualified(path) && File.Exists(path))
         {
             Trace.WriteLine($"Custom sound file found at \"{path}\".");
             return true;
         }
 
-        Trace.WriteLine($"Custom sound file \"{path}\" could not be found. Trying the executable's folder.");
+        if (path.StartsWith("./") || path.StartsWith(@".\"))
+        {
+            path = path[2..];
+        }
+
         path = Path.Join(AppContext.BaseDirectory, settings.CustomSound);
         if (File.Exists(path))
         {
             Trace.WriteLine($"Custom sound file found at \"{path}\".");
             return true;
         }
+        else
+        {
+            Trace.WriteLine($"Custom sound file \"{path}\" could not be found.");
+        }
 
-        Trace.WriteLine($"The custom sound file \"{settings.CustomSound}\" could not be found.");
+        path = Path.Join(Environment.CurrentDirectory, settings.CustomSound);
+        if (File.Exists(path))
+        {
+            Trace.WriteLine($"Custom sound file found at \"{path}\".");
+            return true;
+        }
+        else
+        {
+            Trace.WriteLine($"The custom sound file \"{settings.CustomSound}\" could not be found.");
+        }
+
         path = null;
         return false;
     }

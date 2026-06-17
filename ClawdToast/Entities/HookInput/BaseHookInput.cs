@@ -8,6 +8,7 @@ namespace ClawdToast.Entities.HookInput;
     IgnoreUnrecognizedTypeDiscriminators = true)]
 [JsonDerivedType(typeof(StopHookInput), "Stop")]
 [JsonDerivedType(typeof(PermissionRequestHookInput), "PermissionRequest")]
+[JsonDerivedType(typeof(PreToolUseHookInput), "PreToolUse")]
 internal abstract class BaseHookInput
 {
     public string TranscriptPath { get; set; } = string.Empty;

@@ -1,23 +1,27 @@
+using ClawdToast;
 using ClawdToast.Configurations;
 using ClawdToast.Contexts;
 using ClawdToast.Entities;
 using ClawdToast.Entities.HookInput;
+using ClawdToast.Extensions;
 using ClawdToast.Services;
 using ClawdToast.Visitors;
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 
 try
 {
     var startTimeUtc = Process.GetCurrentProcess().StartTime.ToUniversalTime();
 
-    Trace.WriteLine($"Starting Clawd Toast at {DateTime.Now}.");
-    Trace.Indent();
-
+    ConsoleEncodingConfiguration.Initialize();
     CultureInfoConfiguration.Initialize();
     ClawdToastAppRegistryConfiguration.Initialize();
     ClawdToastTraceConfiguration.Initialize();
     var settings = ClawdToastSettings.Initialize();
+
+    Trace.WriteLine($"Starting Clawd Toast at {startTimeUtc}.");
+    Trace.Indent();
 
     // Start it early so that it doesn't have an delay when it's time to play the sound.
     using var soundService = settings.HasCustomSound
@@ -31,9 +35,8 @@ try
 
     try
     {
-#if DEBUG && DEBUG_EXAMPLE_DATA
-        var raw = File.ReadAllText("Debug/PermissionRequest/hook_input.json");
-        Debug.WriteLine(raw);
+#if DEBUG && DEBUG_MOCK_INPUT
+        var raw = File.ReadAllText("Debug/PreToolUse/AskUserQuestion/hook_input.json", Encoding.UTF8);
         hookInput = JsonSerializer.Deserialize(raw, HookInputJsonSerializerContext.Default.BaseHookInput);
 #elif DEBUG
         var raw = Console.In.ReadToEnd();
@@ -46,15 +49,13 @@ try
 
         if (hookInput is null)
         {
-            Trace.WriteLine("Failed to deserialize input JSON.");
+            Console.Error.TraceAndWriteLine("Failed to deserialize input JSON.");
             return 1;
         }
-
-        Debug.WriteLine(JsonSerializer.Serialize(hookInput, HookInputJsonSerializerContext.Default.BaseHookInput));
     }
     catch (Exception ex)
     {
-        Trace.WriteLine($"Failed to deserialize input JSON, exception thrown: {ex.Message}.");
+        Console.Error.TraceAndWriteLine($"Failed to deserialize input JSON, exception thrown: {ex.Message}.");
         return 1;
     }
 
@@ -62,6 +63,7 @@ try
 
     if (!duration.HasValue)
     {
+        Console.Error.TraceAndWriteLine("Duration did not meet minimum duration requirement defined in settings.");
         return 1;
     }
 
@@ -70,12 +72,20 @@ try
 
     var toastService = new ToastService(hookInput, xmlDocument, soundService);
     toastService.ShowToast();
+
+    if (Shared.ShouldPrintHookOutput)
+    {
+        var hookOutputJson = JsonSerializer.Serialize(Shared.HookOutput, HookOutputSerializerContext.Default.BaseHookOutput);
+        Trace.WriteLine("Printing the output json to stdout.");
+        Debug.WriteLine(hookOutputJson);
+        Console.Out.WriteLine(hookOutputJson);
+    }
 }
 catch (Exception ex)
 {
-    Trace.WriteLine("An error occurred while processing the hook input or showing the toast.");
+    Trace.WriteLine($"An error occurred while processing the hook input or showing the toast.");
+    Trace.WriteLine(ex.GetType());
     Trace.WriteLine(ex.Message);
-    Debug.WriteLine(ex);
 }
 finally
 {
@@ -85,4 +95,4 @@ finally
     Trace.Flush();
 }
 
-return 0;
+return Shared.ReturnCode;
