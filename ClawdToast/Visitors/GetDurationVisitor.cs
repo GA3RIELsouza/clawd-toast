@@ -95,4 +95,5 @@ internal sealed class GetDurationVisitor(ClawdToastSettings Settings, DateTime S
     }
 
     public TimeSpan? Visit(PermissionRequestHookInput hookInput) => TimeSpan.MaxValue;
+        if (hookInput.ToolName is "AskUserQuestion")
 }
