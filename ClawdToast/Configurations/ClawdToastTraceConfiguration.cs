@@ -4,10 +4,18 @@ namespace ClawdToast.Configurations;
 
 internal static class ClawdToastTraceConfiguration
 {
+    internal const string TraceFolder = "logs";
+    internal const string TraceFile = "clawd-toast.log";
+
     [Conditional("TRACE")]
     internal static void Initialize()
     {
-        var logPath = Path.Combine(Path.GetDirectoryName(Environment.ProcessPath)!, "clawd-toast.log");
+        _ = Directory.CreateDirectory(TraceFolder);
+
+        var logPath = Path.Combine(
+            Path.GetDirectoryName(Environment.ProcessPath) ?? string.Empty,
+            TraceFolder,
+            TraceFile);
 
         Trace.Listeners.Add(new TextWriterTraceListener(logPath));
         Trace.IndentSize = 4;

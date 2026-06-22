@@ -24,19 +24,24 @@ try
     Trace.Indent();
 
     // Start it early so that it doesn't have an delay when it's time to play the sound.
-    using var soundService = settings.HasCustomSound
+    using var soundService = settings.Sound.HasCustomSound
         ? new SoundService(settings)
         : null;
 
     Thread.Sleep(500);
 
     BaseHookInput? hookInput;
-    var getDurationVisitor = new GetDurationVisitor(settings, startTimeUtc);
 
     try
     {
 #if DEBUG && DEBUG_MOCK_INPUT
-        var raw = File.ReadAllText("Debug/PreToolUse/AskUserQuestion/hook_input.json", Encoding.UTF8);
+        var files = new string[] {
+            "Debug/Stop/hook_input.json",
+            "Debug/PermissionRequest/hook_input.json",
+            "Debug/PreToolUse/AskUserQuestion/hook_input.json"
+        };
+
+        var raw = File.ReadAllText(files[0], Encoding.UTF8);
         hookInput = JsonSerializer.Deserialize(raw, HookInputJsonSerializerContext.Default.BaseHookInput);
 #elif DEBUG
         var raw = Console.In.ReadToEnd();
@@ -59,15 +64,16 @@ try
         return 1;
     }
 
-    var duration = hookInput.Apply(getDurationVisitor);
+    var getTranscriptDataVisitor = new GetTranscriptDataVisitor(startTimeUtc);
+    var transcriptData = hookInput.Apply(getTranscriptDataVisitor);
 
-    if (!duration.HasValue)
+    if (transcriptData.Duration.HasValue && transcriptData.Duration.Value < settings.MinimumDuration.ToTimeSpan())
     {
         Console.Error.TraceAndWriteLine("Duration did not meet minimum duration requirement defined in settings.");
         return 1;
     }
 
-    var createXmlVisitor = new CreateXmlVisitor(duration.Value, settings);
+    var createXmlVisitor = new CreateXmlVisitor(transcriptData, settings);
     var xmlDocument = hookInput.Apply(createXmlVisitor);
 
     var toastService = new ToastService(hookInput, xmlDocument, soundService);

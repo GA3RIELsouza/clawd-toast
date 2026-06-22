@@ -1,37 +1,46 @@
 using ClawdToast.Entities;
 using ClawdToast.Entities.HookInput;
 using ClawdToast.Extensions;
-using System.Diagnostics;
+using ClawdToast.Formatters;
 using System.Net;
-using System.Reflection.Emit;
 using Windows.Data.Xml.Dom;
 using static ClawdToast.Entities.HookInput.PreToolUseHookInputToolInput;
 
 namespace ClawdToast.Visitors;
 
-internal sealed class CreateXmlVisitor(TimeSpan Duration, ClawdToastSettings Settings) : IHookInputVisitor<XmlDocument>
+internal sealed class CreateXmlVisitor(TranscriptData TranscriptData, ClawdToastSettings Settings) : IHookInputVisitor<XmlDocument>
 {
     public XmlDocument Visit(StopHookInput hookInput)
     {
-        const int MaxAssistantMessageLength = 16;
+        const int MaxAssistantMessageLength = 128;
 
-        var durationStr = GetDurationString(Duration);
+        var headerStr = XmlSafeFormatter.Format(
+            $"""
+            <header id="{TranscriptData.SessionId ?? Guid.Empty}"
+                    title="{TranscriptData.Title ?? "Chat sem título"}"
+                    arguments="" />
+            """
+        );
 
-        var customSoundStr = Settings.HasCustomSound
+        var durationStr = XmlSafeFormatter.Format($"""<text placement="attribution">Demorou {GetDurationString(TranscriptData.Duration)}.</text>""");
+
+        var customSoundStr = Settings.Sound.HasCustomSound
             ? """<audio silent="true" />"""
             : string.Empty;
 
-        var lastAssistantMsgStr = WebUtility.HtmlDecode(hookInput.LastAssistantMessage.Length > MaxAssistantMessageLength
-             ? $"{hookInput.LastAssistantMessage[..MaxAssistantMessageLength]}..."
-             : hookInput.LastAssistantMessage);
+        var lastAssistantMsg = hookInput.LastAssistantMessage.Length > MaxAssistantMessageLength
+            ? XmlSafeFormatter.Format($"{hookInput.LastAssistantMessage[..MaxAssistantMessageLength]}...")
+            : XmlSafeFormatter.Format($"{hookInput.LastAssistantMessage}");
 
         var xmlStr =
 $"""
 <toast duration="long">
-    <visual>
+    {headerStr}
+    <visual lang="pt-br">
         <binding template="ToastGeneric">
-            <text hint-style="header">O Claude respondeu após {durationStr}.</text>
-            <text hint-style="body" hint-wrap="true">{lastAssistantMsgStr}</text>
+            <text hint-style="header">O Claude respondeu.</text>
+            <text hint-style="body" hint-wrap="true">{lastAssistantMsg}</text>
+            {durationStr}
         </binding>
     </visual>
     {customSoundStr}
@@ -49,28 +58,36 @@ $"""
 
     public XmlDocument Visit(PermissionRequestHookInput hookInput)
     {
-        var customSoundStr = Settings.HasCustomSound
+        var headerStr = XmlSafeFormatter.Format(
+            $"""
+            <header id="{TranscriptData.SessionId ?? Guid.Empty}"
+                    title="{TranscriptData.Title ?? "Chat sem título"}"
+                    arguments="" />
+            """
+        );
+
+        var customSoundStr = Settings.Sound.HasCustomSound
             ? """<audio silent="true" />"""
             : string.Empty;
 
         var descriptionStr = string.IsNullOrWhiteSpace(hookInput.ToolInput.Description)
             ? string.Empty
-            : $"""<text hint-style="captionSubtle">{WebUtility.HtmlEncode(hookInput.ToolInput.Description)}</text>""";
+            : XmlSafeFormatter.Format($"""<text hint-style="header">{hookInput.ToolInput.Description}</text>""");
+
+        var bodyStr = XmlSafeFormatter.Format($"""<text hint-style="body">{hookInput.ToolName} {hookInput.ToolInput.Command}</text>""");
 
         var xmlStr =
 $"""
 <toast duration="long">
+    {headerStr}
     <visual>
         <binding template="ToastGeneric">
             <text hint-style="header">O Claude solicitou permissões.</text>
             {descriptionStr}
-            <text hint-style="body">{WebUtility.HtmlEncode($"{hookInput.ToolName} {hookInput.ToolInput.Command}")}</text>
+            {bodyStr}
         </binding>
     </visual>
     {customSoundStr}
-    <commands scenario="alarm">
-        <command id="dismiss" arguments="{Shared.IgnoreArgument}" />
-    </commands>
 </toast>
 """;
 
@@ -82,7 +99,7 @@ $"""
 
     public XmlDocument Visit(PreToolUseHookInput hookInput)
     {
-        var customSoundStr = Settings.HasCustomSound
+        var customSoundStr = Settings.Sound.HasCustomSound
             ? """<audio silent="true" />"""
             : string.Empty;
 
@@ -117,10 +134,13 @@ $"""
                 var header = WebUtility.HtmlEncode(q.Header);
                 var question = WebUtility.HtmlEncode(q.Question);
 
+                var optionsEnumerable = NonMultiSelectOptionsEnumerableHelper(q);
+                var optionsStr = string.Join('\n', optionsEnumerable);
+
                 return
                 $"""
                 <input id="{header}" title="{question}" type="selection">
-                    {string.Join('\n', NonMultiSelectOptionsEnumerableHelper(q))}
+                    {optionsStr}
                     <selection id="{Shared.OtherInputOptionId}" content="{Shared.OtherInputOptionContent}" />
                 </input>
                 <input id="{header}{Shared.OtherInputOptionId}" type="text" placeHolderContent="{Shared.OtherInputOptionContent}" />
@@ -138,7 +158,7 @@ $"""
                 yield return $"""<selection id="{label}" content="{label} ({description})" />""";
             }
         }
-
+        
         var questionsArr = hookInput
             .ToolInput
             .Questions
@@ -153,7 +173,7 @@ $"""
 
         var areThereTooManyInputFields = inputFieldsCount > InputFieldsLimit;
 
-        var actionsOrTextStr = areThereTooManyInputFields
+        var actionsOrCommandsStr = areThereTooManyInputFields
             ?
             $"""
             <commands scenario="alarm">
@@ -164,13 +184,13 @@ $"""
             $"""
             <actions>
                 {string.Join('\n', questionsArr)}
-                <action content="Responder" arguments="{Shared.SubmitArgument}" activationType="background" />
+                <action hint-buttonStyle="Success" content="Responder" arguments="{Shared.SubmitArgument}" activationType="background" />
                 <action content="Ignorar" arguments="{Shared.IgnoreArgument}" activationType="background" />
             </actions>
             """;
 
         var aditionalText = areThereTooManyInputFields
-            ? 
+            ?
             $"""
             <text hint-style="body">
                 {string.Join('\n', hookInput.ToolInput.Questions.Select(q => $"- {q.Question}"))}
@@ -178,21 +198,31 @@ $"""
             """
             : string.Empty;
 
-        var header = questionsArr.Length == 1
+        var questions = questionsArr.Length == 1
             ? "O Claude fez uma pergunta."
             : $"O Claude fez {questionsArr.Length} perguntas.";
 
+        var headerStr = XmlSafeFormatter.Format(
+            $"""
+            <header id="{TranscriptData.SessionId ?? Guid.Empty}"
+                    title="{TranscriptData.Title ?? "Chat sem título"}"
+                    arguments="" />
+            """
+        );
+
         var xmlStr =
 $"""
-<toast duration="long">
+<toast duration="long"
+       useButtonStyle="true">
+    {headerStr}
     <visual>
         <binding template="ToastGeneric">
-            <text hint-style="header">{header}</text>
+            <text hint-style="header">{questions}</text>
             {aditionalText}
         </binding>
     </visual>
     {customSoundStr}
-    {actionsOrTextStr}
+    {actionsOrCommandsStr}
 </toast>
 """;
 
@@ -202,8 +232,15 @@ $"""
         return xmlDocument;
     }
 
-    private static string GetDurationString(TimeSpan duration)
+    private static string GetDurationString(TimeSpan? durationNullable)
     {
+        if (!durationNullable.HasValue)
+        {
+            return "um tempo indeterminado";
+        }
+
+        var duration = durationNullable.Value;
+
         if (duration == TimeSpan.MinValue)
         {
             return "um tempo indeterminado";

@@ -25,6 +25,8 @@ internal sealed class SoundService : IDisposable
                 RealTimePlayback = true,
                 AudioCategory = MediaPlayerAudioCategory.SoundEffects,
                 Source = MediaSource.CreateFromUri(new Uri(path)),
+                Volume = settings.Sound.Volume,
+                IsLoopingEnabled = settings.Sound.Loop
             };
 
             _mediaPlayer.MediaEnded += (sender, args) => Trace.WriteLine("Custom sound playback finished.");
@@ -63,18 +65,25 @@ internal sealed class SoundService : IDisposable
 
     private static bool TryGetRightPath(ClawdToastSettings settings, [NotNullWhen(true)] out string? path)
     {
-        if (!settings.HasCustomSound)
+        if (!settings.Sound.HasCustomSound)
         {
             Trace.WriteLine("No custom sound set.");
             path = null;
             return false;
         }
 
-        path = settings.CustomSound;
+        path = settings.Sound.CustomSound;
 
         if (path.Equals("MUTE", StringComparison.OrdinalIgnoreCase))
         {
             Trace.WriteLine("Custom sound set to mute.");
+            return false;
+        }
+
+        if (settings.Sound.Volume is 0)
+        {
+            Trace.WriteLine("Volume is set to 0.");
+            path = null;
             return false;
         }
 
@@ -89,7 +98,7 @@ internal sealed class SoundService : IDisposable
             path = path[2..];
         }
 
-        path = Path.Join(AppContext.BaseDirectory, settings.CustomSound);
+        path = Path.Join(AppContext.BaseDirectory, settings.Sound.CustomSound);
         if (File.Exists(path))
         {
             Trace.WriteLine($"Custom sound file found at \"{path}\".");
@@ -100,7 +109,7 @@ internal sealed class SoundService : IDisposable
             Trace.WriteLine($"Custom sound file \"{path}\" could not be found.");
         }
 
-        path = Path.Join(Environment.CurrentDirectory, settings.CustomSound);
+        path = Path.Join(Environment.CurrentDirectory, settings.Sound.CustomSound);
         if (File.Exists(path))
         {
             Trace.WriteLine($"Custom sound file found at \"{path}\".");
@@ -108,7 +117,7 @@ internal sealed class SoundService : IDisposable
         }
         else
         {
-            Trace.WriteLine($"The custom sound file \"{settings.CustomSound}\" could not be found.");
+            Trace.WriteLine($"The custom sound file \"{settings.Sound.CustomSound}\" could not be found.");
         }
 
         path = null;

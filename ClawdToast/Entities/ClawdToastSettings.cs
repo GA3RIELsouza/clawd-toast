@@ -5,23 +5,10 @@ using System.Text.Json.Serialization;
 
 namespace ClawdToast.Entities;
 
-internal class ClawdToastSettingsMinimumDuration
-{
-    public int Hours { get; set; } = 0;
-    public int Minutes { get; set; } = 2;
-    public int Seconds { get; set; } = 0;
-
-    public TimeSpan ToTimeSpan() => new(Hours, Minutes, Seconds);
-}
-
 internal class ClawdToastSettings
 {
     public required ClawdToastSettingsMinimumDuration MinimumDuration { get; set; } = new();
-    public string? CustomSound { get; set; }
-
-    [MemberNotNullWhen(true, nameof(CustomSound))]
-    [JsonIgnore]
-    public bool HasCustomSound => !string.IsNullOrWhiteSpace(CustomSound);
+    public ClawdToastSettingsSound Sound { get; set; } = new();
 
     internal static ClawdToastSettings Initialize()
     {
@@ -71,10 +58,51 @@ internal class ClawdToastSettings
                 settings,
                 ClawdToastSettingsJsonSerializerContext.Default.ClawdToastSettings));
     }
+
+    internal class ClawdToastSettingsMinimumDuration
+    {
+        public int Hours { get; set; } = 0;
+        public int Minutes { get; set; } = 2;
+        public int Seconds { get; set; } = 0;
+
+        public TimeSpan ToTimeSpan() => new(Hours, Minutes, Seconds);
+    }
+
+    internal class ClawdToastSettingsSound
+    {
+        public string CustomSound { get; set; } = string.Empty;
+
+        [MemberNotNullWhen(true, nameof(CustomSound))]
+        [JsonIgnore]
+        public bool HasCustomSound => !string.IsNullOrWhiteSpace(CustomSound);
+
+        public double Volume
+        {
+            get;
+            set
+            {
+                if (value < 0)
+                {
+                    field = 0;
+                    return;
+                }
+
+                if (value > 1)
+                {
+                    field = 1;
+                    return;
+                }
+
+                field = value;
+                return;
+            }
+        } = 1;
+
+        public bool Loop { get; set; } = false;
+    }
 }
 
 [JsonSerializable(typeof(ClawdToastSettings))]
-[JsonSerializable(typeof(ClawdToastSettingsMinimumDuration))]
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
     PropertyNameCaseInsensitive = true,

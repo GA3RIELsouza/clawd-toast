@@ -9,7 +9,7 @@
   "tool_input": {
     "questions": [
       {
-        "question": "Qual é o seu nome? </input>",
+        "question": "Qual é o seu nome?",
         "header": "Nome",
         "options": [
           {
