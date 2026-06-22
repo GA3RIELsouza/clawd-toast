@@ -1,12 +1,10 @@
-﻿using ClawdToast.Entities.TranscriptEntry;
+﻿using ClawdToast.Contexts;
+using ClawdToast.Entities.TranscriptEntry;
 using ClawdToast.Entities.TranscriptEntry.System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace ClawdToast.Converters;
-
-#pragma warning disable IL2026 // Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code
-#pragma warning disable IL3050 // Calling members annotated with 'RequiresDynamicCodeAttribute' may break functionality when AOT compiling.
 
 internal sealed class TranscriptEntryConverter : JsonConverter<BaseTranscriptEntry>
 {
@@ -19,12 +17,13 @@ internal sealed class TranscriptEntryConverter : JsonConverter<BaseTranscriptEnt
         var type = root.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : null;
         var subtype = root.TryGetProperty("subtype", out var subtypeProp) ? subtypeProp.GetString() : null;
 
+        var context = TranscriptEntryJsonSerializerContext.Default;
         return (type, subtype) switch
         {
-            ("system", "turn_duration") => JsonSerializer.Deserialize<TurnDurationTranscriptEntry>(ref reader, options),
-            ("system", "stop_hook_summary") => JsonSerializer.Deserialize<StopHookSummaryTranscriptEntry>(ref reader, options),
-            ("system", _) => JsonSerializer.Deserialize<BaseSystemTranscriptEntry>(ref reader, options),
-            ("ai-title", _) => JsonSerializer.Deserialize<AiTitleTranscriptEntry>(ref reader, options),
+            ("system", "turn_duration") => JsonSerializer.Deserialize(ref reader, context.TurnDurationTranscriptEntry),
+            ("system", "stop_hook_summary") => JsonSerializer.Deserialize(ref reader, context.StopHookSummaryTranscriptEntry),
+            ("system", _) => JsonSerializer.Deserialize(ref reader, context.BaseSystemTranscriptEntry),
+            ("ai-title", _) => JsonSerializer.Deserialize(ref reader, context.AiTitleTranscriptEntry),
             _ => Default(ref root, ref reader, ref readerClone)
         };
     }
@@ -41,9 +40,28 @@ internal sealed class TranscriptEntryConverter : JsonConverter<BaseTranscriptEnt
 
     public override void Write(Utf8JsonWriter writer, BaseTranscriptEntry value, JsonSerializerOptions options)
     {
-        JsonSerializer.Serialize(writer, (object)value, options);
+        var context = TranscriptEntryJsonSerializerContext.Default;
+        switch (value)
+        {
+            case TurnDurationTranscriptEntry turnDuration:
+                JsonSerializer.Serialize(writer, turnDuration, context.TurnDurationTranscriptEntry);
+                break;
+
+            case StopHookSummaryTranscriptEntry stopHookSummary:
+                JsonSerializer.Serialize(writer, stopHookSummary, context.StopHookSummaryTranscriptEntry);
+                break;
+
+            case BaseSystemTranscriptEntry baseSystem:
+                JsonSerializer.Serialize(writer, baseSystem, context.BaseSystemTranscriptEntry);
+                break;
+
+            case AiTitleTranscriptEntry aiTitle:
+                JsonSerializer.Serialize(writer, aiTitle, context.AiTitleTranscriptEntry);
+                break;
+
+            default:
+                JsonSerializer.Serialize(writer, value, context.BaseTranscriptEntry);
+                break;
+        }
     }
 }
-
-#pragma warning restore IL3050 // Calling members annotated with 'RequiresDynamicCodeAttribute' may break functionality when AOT compiling.
-#pragma warning restore IL2026 // Members annotated with 'RequiresUnreferencedCodeAttribute' require dynamic access otherwise can break functionality when trimming application code
