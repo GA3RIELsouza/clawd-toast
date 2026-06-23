@@ -26,7 +26,7 @@
 	</ItemGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-		<DefineConstants>$(DefineConstants);DEBUG_MOCK_INPUT</DefineConstants>
+	  <DefineConstants>$(DefineConstants);DEBUG_MOCK_INPUT</DefineConstants>
 	</PropertyGroup>
 	
 	<ItemGroup Condition="$(DefineConstants.Contains('DEBUG_MOCK_INPUT'))">

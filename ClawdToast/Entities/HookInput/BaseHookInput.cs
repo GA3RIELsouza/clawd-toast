@@ -12,6 +12,8 @@ namespace ClawdToast.Entities.HookInput;
 internal abstract class BaseHookInput
 {
     public string TranscriptPath { get; set; } = string.Empty;
+    public string? AgentId { get; set; }
+    public string? AgentType { get; set; }
 
     public abstract T Apply<T>(IHookInputVisitor<T> visitor);
 }

@@ -5,10 +5,13 @@ using System.Text.Json.Serialization;
 
 namespace ClawdToast.Entities;
 
-internal class ClawdToastSettings
+internal sealed class ClawdToastSettings
 {
     public required ClawdToastSettingsMinimumDuration MinimumDuration { get; set; } = new();
-    public ClawdToastSettingsSound Sound { get; set; } = new();
+    public required ClawdToastSettingsSound Sound { get; set; } = new();
+    public required ClwadToastSettingsSubagent Subagent { get; set; } = new();
+
+    // -----------------------------------------------------------------------------------------
 
     internal static ClawdToastSettings Initialize()
     {
@@ -50,7 +53,12 @@ internal class ClawdToastSettings
 
     private static void WriteSettings([NotNull] ref ClawdToastSettings? settings, string settingsPath)
     {
-        settings ??= new() { MinimumDuration = new() };
+        settings ??= new()
+        {
+            MinimumDuration = new(),
+            Sound = new(),
+            Subagent = new()
+        };
 
         using var writter = File.CreateText(settingsPath);
         writter.Write(
@@ -59,7 +67,7 @@ internal class ClawdToastSettings
                 ClawdToastSettingsJsonSerializerContext.Default.ClawdToastSettings));
     }
 
-    internal class ClawdToastSettingsMinimumDuration
+    internal sealed class ClawdToastSettingsMinimumDuration
     {
         public int Hours { get; set; } = 0;
         public int Minutes { get; set; } = 2;
@@ -68,9 +76,9 @@ internal class ClawdToastSettings
         public TimeSpan ToTimeSpan() => new(Hours, Minutes, Seconds);
     }
 
-    internal class ClawdToastSettingsSound
+    internal sealed class ClawdToastSettingsSound
     {
-        public string CustomSound { get; set; } = string.Empty;
+        public string? CustomSound { get; set; } = null;
 
         [MemberNotNullWhen(true, nameof(CustomSound))]
         [JsonIgnore]
@@ -99,6 +107,11 @@ internal class ClawdToastSettings
         } = 1;
 
         public bool Loop { get; set; } = false;
+    }
+
+    internal sealed class ClwadToastSettingsSubagent
+    {
+        public bool SubagentHooksEnabled { get; set; } = false;
     }
 }
 

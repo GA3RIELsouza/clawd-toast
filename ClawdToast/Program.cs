@@ -64,6 +64,12 @@ try
         return 1;
     }
 
+    if (!settings.Subagent.SubagentHooksEnabled && !string.IsNullOrEmpty(hookInput.AgentId))
+    {
+        Console.Error.TraceAndWriteLine("Toast is not triggered by subagents, as defined in settings.");
+        return 1;
+    }
+
     var getTranscriptDataVisitor = new GetTranscriptDataVisitor(startTimeUtc);
     var transcriptData = hookInput.Apply(getTranscriptDataVisitor);
 
