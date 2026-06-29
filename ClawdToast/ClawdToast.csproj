@@ -23,6 +23,7 @@
 		<PackageReference Include="Microsoft.Windows.CsWinRT" Version="2.2.0" />
 
 		<EmbeddedResource Include="Assets/icon16.png" LogicalName="ClawdToast.icon16.png" />
+		<EmbeddedResource Include="Assets/nuke.png" LogicalName="nuke.png" />
 	</ItemGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">

@@ -7,11 +7,16 @@ namespace ClawdToast.Entities;
 
 internal sealed class ClawdToastSettings
 {
-    public required ClawdToastSettingsMinimumDuration MinimumDuration { get; set; } = new();
-    public required ClawdToastSettingsSound Sound { get; set; } = new();
-    public required ClwadToastSettingsSubagent Subagent { get; set; } = new();
+    #region Properties
 
-    // -----------------------------------------------------------------------------------------
+    public ClawdToastSettingsMinimumDuration MinimumDuration { get; set; } = new();
+    public ClawdToastSettingsSound Sound { get; set; } = new();
+    public ClawdToastSettingsSubagent Subagent { get; set; } = new();
+    public ClawdToastSettingsEasterEggs EasterEggs { get; set; } = new();
+
+    #endregion
+
+    #region Methods
 
     internal static ClawdToastSettings Initialize()
     {
@@ -53,12 +58,7 @@ internal sealed class ClawdToastSettings
 
     private static void WriteSettings([NotNull] ref ClawdToastSettings? settings, string settingsPath)
     {
-        settings ??= new()
-        {
-            MinimumDuration = new(),
-            Sound = new(),
-            Subagent = new()
-        };
+        settings ??= new();
 
         using var writter = File.CreateText(settingsPath);
         writter.Write(
@@ -66,6 +66,10 @@ internal sealed class ClawdToastSettings
                 settings,
                 ClawdToastSettingsJsonSerializerContext.Default.ClawdToastSettings));
     }
+
+    #endregion
+
+    #region Subclasses
 
     internal sealed class ClawdToastSettingsMinimumDuration
     {
@@ -80,39 +84,34 @@ internal sealed class ClawdToastSettings
     {
         public string? CustomSound { get; set; } = null;
 
-        [MemberNotNullWhen(true, nameof(CustomSound))]
-        [JsonIgnore]
-        public bool HasCustomSound => !string.IsNullOrWhiteSpace(CustomSound);
+        [MemberNotNullWhen(true, nameof(CustomSound)), JsonIgnore]
+        public bool HasCustomSound => Volume is not 0D && !string.IsNullOrWhiteSpace(CustomSound) && CustomSound is not Shared.MuteKeyword;
 
         public double Volume
         {
             get;
-            set
+            set => field = value switch
             {
-                if (value < 0)
-                {
-                    field = 0;
-                    return;
-                }
-
-                if (value > 1)
-                {
-                    field = 1;
-                    return;
-                }
-
-                field = value;
-                return;
-            }
+                < 0 => 0,
+                > 1 => 1,
+                _ => value
+            };
         } = 1;
 
         public bool Loop { get; set; } = false;
     }
 
-    internal sealed class ClwadToastSettingsSubagent
+    internal sealed class ClawdToastSettingsSubagent
     {
         public bool SubagentHooksEnabled { get; set; } = false;
     }
+
+    internal sealed class ClawdToastSettingsEasterEggs
+    {
+        public bool NukeEnabled { get; set; } = false;
+    }
+
+    #endregion
 }
 
 [JsonSerializable(typeof(ClawdToastSettings))]

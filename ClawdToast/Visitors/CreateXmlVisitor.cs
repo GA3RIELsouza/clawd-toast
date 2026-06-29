@@ -2,6 +2,8 @@ using ClawdToast.Entities;
 using ClawdToast.Entities.HookInput;
 using ClawdToast.Extensions;
 using ClawdToast.Formatters;
+using ClawdToast.Helpers;
+using System.Diagnostics;
 using System.Net;
 using Windows.Data.Xml.Dom;
 using static ClawdToast.Entities.HookInput.PreToolUseHookInputToolInput;
@@ -14,19 +16,26 @@ internal sealed class CreateXmlVisitor(TranscriptData TranscriptData, ClawdToast
     {
         const int MaxAssistantMessageLength = 128;
 
-        var headerStr = XmlSafeFormatter.Format(
-            $"""
-            <header id="{TranscriptData.SessionId ?? Guid.Empty}"
-                    title="{TranscriptData.Title ?? "Chat sem título"}"
-                    arguments="" />
-            """
-        );
+        static IEnumerable<string> GetNukeImageTriggers()
+        {
+            yield return "CAIO";
+            yield return "ERRO 500";
+            yield return "STATUS CODE 500";
+            yield return "BUG";
+        }
 
-        var durationStr = XmlSafeFormatter.Format($"""<text placement="attribution">Demorou {GetDurationString(TranscriptData.Duration)}.</text>""");
+        var isNukeTriggered = false;
 
-        var customSoundStr = Settings.Sound.HasCustomSound
-            ? """<audio silent="true" />"""
-            : string.Empty;
+        if (Settings.EasterEggs.NukeEnabled)
+        {
+            var nukeTrigger = GetNukeImageTriggers()
+                .Where(trigger => hookInput.LastAssistantMessage.Contains(trigger, StringComparison.OrdinalIgnoreCase))
+                .FirstOrDefault();
+
+            isNukeTriggered = nukeTrigger is not null;
+
+            Trace.WriteLineIf(isNukeTriggered, $"Nuke hero image triggered by \"{nukeTrigger}\".");
+        }
 
         var lastAssistantMsg = hookInput.LastAssistantMessage.Length > MaxAssistantMessageLength
             ? XmlSafeFormatter.Format($"{hookInput.LastAssistantMessage[..MaxAssistantMessageLength]}...")
@@ -35,16 +44,46 @@ internal sealed class CreateXmlVisitor(TranscriptData TranscriptData, ClawdToast
         var xmlStr =
 $"""
 <toast duration="long">
-    {headerStr}
+    {GetHeaderTag()}
     <visual lang="pt-br">
         <binding template="ToastGeneric">
-            <text hint-style="header">O Claude respondeu.</text>
+            {(isNukeTriggered ? GetNukeImageTag() : string.Empty)}
+            <text hint-style="header">{(isNukeTriggered ? "O Claude detectou uma bomba!" : "O Claude respondeu.")}</text>
             <text hint-style="body" hint-wrap="true">{lastAssistantMsg}</text>
-            {durationStr}
+            {GetDurationTextTag()}
         </binding>
     </visual>
-    {customSoundStr}
-    <commands scenario="alarm">
+    {GetSoundTag()}
+    <commands scenario="{(isNukeTriggered ? "urgent" : "alarm")}">
+        <command id="dismiss" arguments="{Shared.IgnoreArgument}" />
+    </commands>
+</toast>
+""";
+
+        var xmlDocument = new XmlDocument();
+        xmlDocument.LoadXml(xmlStr);
+
+        return xmlDocument;
+    }
+
+    public XmlDocument Visit(StopFailureHookInput hookInput)
+    {
+        var errorMsg = XmlSafeFormatter.Format($"({hookInput.ErrorDetails}) {hookInput.LastAssistantMessage}");
+
+        var xmlStr =
+$"""
+<toast duration="long">
+    {GetHeaderTag()}
+    <visual lang="pt-br">
+        <binding template="ToastGeneric">
+            {GetNukeImageTag()}
+            <text hint-style="header">O Claude encerrou com um erro.</text>
+            <text hint-style="body" hint-wrap="true">{errorMsg}</text>
+            {GetDurationTextTag()}
+        </binding>
+    </visual>
+    {GetSoundTag()}
+    <commands scenario="urgent">
         <command id="dismiss" arguments="{Shared.IgnoreArgument}" />
     </commands>
 </toast>
@@ -58,18 +97,6 @@ $"""
 
     public XmlDocument Visit(PermissionRequestHookInput hookInput)
     {
-        var headerStr = XmlSafeFormatter.Format(
-            $"""
-            <header id="{TranscriptData.SessionId ?? Guid.Empty}"
-                    title="{TranscriptData.Title ?? "Chat sem título"}"
-                    arguments="" />
-            """
-        );
-
-        var customSoundStr = Settings.Sound.HasCustomSound
-            ? """<audio silent="true" />"""
-            : string.Empty;
-
         var descriptionStr = string.IsNullOrWhiteSpace(hookInput.ToolInput.Description)
             ? string.Empty
             : XmlSafeFormatter.Format($"""<text hint-style="header">{hookInput.ToolInput.Description}</text>""");
@@ -79,7 +106,7 @@ $"""
         var xmlStr =
 $"""
 <toast duration="long">
-    {headerStr}
+    {GetHeaderTag()}
     <visual>
         <binding template="ToastGeneric">
             <text hint-style="header">O Claude solicitou permissões.</text>
@@ -87,7 +114,7 @@ $"""
             {bodyStr}
         </binding>
     </visual>
-    {customSoundStr}
+    {GetSoundTag()}
 </toast>
 """;
 
@@ -99,10 +126,6 @@ $"""
 
     public XmlDocument Visit(PreToolUseHookInput hookInput)
     {
-        var customSoundStr = Settings.Sound.HasCustomSound
-            ? """<audio silent="true" />"""
-            : string.Empty;
-
         static string QuestionsEnumerableHelper(AskUserQuestionHookInputQuestion q)
         {
             if (q.MultiSelect)
@@ -158,7 +181,7 @@ $"""
                 yield return $"""<selection id="{label}" content="{label} ({description})" />""";
             }
         }
-        
+
         var questionsArr = hookInput
             .ToolInput
             .Questions
@@ -184,7 +207,7 @@ $"""
             $"""
             <actions>
                 {string.Join('\n', questionsArr)}
-                <action hint-buttonStyle="Success" content="Responder" arguments="{Shared.SubmitArgument}" activationType="background" />
+                <action content="Responder" arguments="{Shared.SubmitArgument}" activationType="background" />
                 <action content="Ignorar" arguments="{Shared.IgnoreArgument}" activationType="background" />
             </actions>
             """;
@@ -202,26 +225,17 @@ $"""
             ? "O Claude fez uma pergunta."
             : $"O Claude fez {questionsArr.Length} perguntas.";
 
-        var headerStr = XmlSafeFormatter.Format(
-            $"""
-            <header id="{TranscriptData.SessionId ?? Guid.Empty}"
-                    title="{TranscriptData.Title ?? "Chat sem título"}"
-                    arguments="" />
-            """
-        );
-
         var xmlStr =
 $"""
-<toast duration="long"
-       useButtonStyle="true">
-    {headerStr}
+<toast duration="long">
+    {GetHeaderTag()}
     <visual>
         <binding template="ToastGeneric">
             <text hint-style="header">{questions}</text>
             {aditionalText}
         </binding>
     </visual>
-    {customSoundStr}
+    {GetSoundTag()}
     {actionsOrCommandsStr}
 </toast>
 """;
@@ -232,67 +246,31 @@ $"""
         return xmlDocument;
     }
 
-    private static string GetDurationString(TimeSpan? durationNullable)
+    private string GetSoundTag() => Settings.Sound.Volume is 0 || Settings.Sound.HasCustomSound
+        ? """<audio silent="true" />"""
+        : string.Empty;
+
+    private string GetHeaderTag() => XmlSafeFormatter.Format
+        (
+            $"""
+            <header id="{TranscriptData.SessionId ?? Guid.Empty}"
+                    title="{TranscriptData.Title ?? "Chat sem título"}"
+                    arguments="" />
+            """
+        );
+
+    private string GetDurationTextTag() => XmlSafeFormatter.Format
+        (
+            $"""<text placement="attribution">Demorou {TranscriptData.Duration.GetDurationString()}.</text>"""
+        );
+
+    private static string GetNukeImageTag()
     {
-        if (!durationNullable.HasValue)
+        if (ManifestResourceHelper.TryExtractIntoTemp("nuke.png", out var path))
         {
-            return "um tempo indeterminado";
+            return $"""<image placement="hero" src="{path}" alt="BOMBA!"/>""";
         }
 
-        var duration = durationNullable.Value;
-
-        if (duration == TimeSpan.MinValue)
-        {
-            return "um tempo indeterminado";
-        }
-
-        var parts = new List<string>(3);
-
-        switch (duration.Hours)
-        {
-            case 1:
-                parts.Add("1 hora");
-                break;
-
-            case > 1:
-                parts.Add($"{duration.Hours} horas");
-                break;
-
-            default: break;
-        }
-
-        switch (duration.Minutes)
-        {
-            case 1:
-                parts.Add("1 minuto");
-                break;
-
-            case > 1:
-                parts.Add($"{duration.Minutes} minutos");
-                break;
-
-            default: break;
-        }
-
-        switch (duration.Seconds)
-        {
-            case 1:
-                parts.Add("1 segundo");
-                break;
-
-            case > 1:
-                parts.Add($"{duration.Seconds} segundos");
-                break;
-
-            default: break;
-        }
-
-        if (parts.Count == 0) return "0 segundos";
-        if (parts.Count == 1) return parts[0];
-
-        var lastPart = parts[^1];
-        parts.RemoveAt(parts.Count - 1);
-
-        return $"{string.Join(", ", parts)} e {lastPart}";
+        return string.Empty;
     }
 }

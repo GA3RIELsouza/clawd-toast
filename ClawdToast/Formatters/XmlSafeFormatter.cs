@@ -23,6 +23,6 @@ internal static class XmlSafeFormatter
     [Conditional("TRACE")]
     internal static void TraceWriteLine(XmlSafeHandler handler) => Trace.WriteLine(Format(handler));
 
-    [Conditional("DEBUG")]
+    [Conditional("TRACE"), Conditional("DEBUG")]
     internal static void DebugWriteLine(XmlSafeHandler handler) => Debug.WriteLine(Format(handler));
 }

@@ -4,6 +4,8 @@ namespace ClawdToast;
 
 internal static class Shared
 {
+    public const string MuteKeyword = "MUTE";
+
     public const string IgnoreArgument = "IGNORE";
     public const string SubmitArgument = "SUBMIT";
 

@@ -25,6 +25,7 @@ internal readonly record struct ToastCallbacks(
 internal sealed class CreateToastCallbacksVisitor(ManualResetEventSlim WaitHandle) : IHookInputVisitor<ToastCallbacks>
 {
     public ToastCallbacks Visit(StopHookInput hookInput) => Defaults;
+    public ToastCallbacks Visit(StopFailureHookInput hookInput) => Defaults;
     public ToastCallbacks Visit(PermissionRequestHookInput hookInput) => Defaults;
     public ToastCallbacks Visit(PreToolUseHookInput hookInput)
     {

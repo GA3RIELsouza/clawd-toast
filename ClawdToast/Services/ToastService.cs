@@ -24,9 +24,10 @@ internal sealed class ToastService(
         toast.Activated += activated;
         toast.Dismissed += dismissed;
 
-        var notifier = ToastNotificationManager.CreateToastNotifier(ClawdToastAppRegistryConfiguration.AppId);
-        notifier.Show(toast);
+        var appId = ClawdToastAppRegistryConfiguration.AppId;
+        var notifier = ToastNotificationManager.CreateToastNotifier(appId);
 
+        notifier.Show(toast);
         waitHandle.Wait();
     }
 }

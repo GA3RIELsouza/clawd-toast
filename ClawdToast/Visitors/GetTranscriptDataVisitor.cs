@@ -111,6 +111,13 @@ internal sealed class GetTranscriptDataVisitor(DateTime StartTimeUtc) : IHookInp
         return new(duration, title, sessionId);
     }
 
+    public TranscriptData Visit(StopFailureHookInput hookInput)
+    {
+        _ = TryGetTitleAndSessionId(GetEntries(hookInput.TranscriptPath), out var title, out var sessionId);
+
+        return new(null, title, sessionId);
+    }
+
     public TranscriptData Visit(PermissionRequestHookInput hookInput)
     {
         _ = TryGetTitleAndSessionId(GetEntries(hookInput.TranscriptPath), out var title, out var sessionId);

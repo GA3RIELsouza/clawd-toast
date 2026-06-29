@@ -67,25 +67,12 @@ internal sealed class SoundService : IDisposable
     {
         if (!settings.Sound.HasCustomSound)
         {
-            Trace.WriteLine("No custom sound set.");
+            Trace.WriteLine("No custom sound set or volume set to 0.");
             path = null;
             return false;
         }
 
         path = settings.Sound.CustomSound;
-
-        if (path.Equals("MUTE", StringComparison.OrdinalIgnoreCase))
-        {
-            Trace.WriteLine("Custom sound set to mute.");
-            return false;
-        }
-
-        if (settings.Sound.Volume is 0)
-        {
-            Trace.WriteLine("Volume is set to 0.");
-            path = null;
-            return false;
-        }
 
         if (Path.IsPathFullyQualified(path) && File.Exists(path))
         {

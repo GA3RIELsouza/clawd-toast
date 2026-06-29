@@ -28,8 +28,6 @@ try
         ? new SoundService(settings)
         : null;
 
-    Thread.Sleep(500);
-
     BaseHookInput? hookInput;
 
     try
@@ -73,10 +71,16 @@ try
     var getTranscriptDataVisitor = new GetTranscriptDataVisitor(startTimeUtc);
     var transcriptData = hookInput.Apply(getTranscriptDataVisitor);
 
-    if (transcriptData.Duration.HasValue && transcriptData.Duration.Value < settings.MinimumDuration.ToTimeSpan())
+    if (transcriptData.Duration.HasValue)
     {
-        Console.Error.TraceAndWriteLine("Duration did not meet minimum duration requirement defined in settings.");
-        return 1;
+        var transcriptDuration = transcriptData.Duration.Value;
+        var settingsMinimumDuration = settings.MinimumDuration.ToTimeSpan();
+
+        if (transcriptDuration < settingsMinimumDuration)
+        {
+            Console.Error.TraceAndWriteLine($"Duration of {transcriptDuration} did not meet minimum duration requirement of {settingsMinimumDuration} defined in the settings.");
+            return 1;
+        }
     }
 
     var createXmlVisitor = new CreateXmlVisitor(transcriptData, settings);
