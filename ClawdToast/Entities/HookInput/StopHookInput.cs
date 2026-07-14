@@ -1,5 +1,5 @@
 ﻿using ClawdToast.Entities.HookInput.Interfaces;
-using ClawdToast.Visitors;
+using ClawdToast.Visitors.Interfaces;
 
 namespace ClawdToast.Entities.HookInput;
 

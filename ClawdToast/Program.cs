@@ -3,6 +3,7 @@ using ClawdToast.Configurations;
 using ClawdToast.Contexts;
 using ClawdToast.Entities;
 using ClawdToast.Entities.HookInput;
+using ClawdToast.Exceptions;
 using ClawdToast.Extensions;
 using ClawdToast.Services;
 using ClawdToast.Visitors;
@@ -39,7 +40,7 @@ try
             "Debug/PreToolUse/AskUserQuestion/hook_input.json"
         };
 
-        var raw = File.ReadAllText(files[0], Encoding.UTF8);
+        var raw = File.ReadAllText(files[1], Encoding.UTF8);
         hookInput = JsonSerializer.Deserialize(raw, HookInputJsonSerializerContext.Default.BaseHookInput);
 #elif DEBUG
         var raw = Console.In.ReadToEnd();
@@ -96,6 +97,11 @@ try
         Debug.WriteLine(hookOutputJson);
         Console.Out.WriteLine(hookOutputJson);
     }
+}
+catch (DoNotShowToastException)
+{
+    Trace.WriteLine($"It was determined that the toast should not be shown through {nameof(DoNotShowToastException)}.");
+    Shared.ShouldPrintHookOutput = false;
 }
 catch (Exception ex)
 {

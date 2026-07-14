@@ -1,6 +1,7 @@
 ﻿using ClawdToast.Entities.HookInput;
 using ClawdToast.Entities.HookOutput;
 using ClawdToast.Services;
+using ClawdToast.Visitors.Interfaces;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Windows.Foundation;

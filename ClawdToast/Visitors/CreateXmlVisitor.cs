@@ -3,6 +3,7 @@ using ClawdToast.Entities.HookInput;
 using ClawdToast.Extensions;
 using ClawdToast.Formatters;
 using ClawdToast.Helpers;
+using ClawdToast.Visitors.Interfaces;
 using System.Diagnostics;
 using System.Net;
 using Windows.Data.Xml.Dom;
@@ -18,7 +19,6 @@ internal sealed class CreateXmlVisitor(TranscriptData TranscriptData, ClawdToast
 
         static IEnumerable<string> GetNukeImageTriggers()
         {
-            yield return "CAIO";
             yield return "ERRO 500";
             yield return "STATUS CODE 500";
             yield return "BUG";
@@ -97,6 +97,17 @@ $"""
 
     public XmlDocument Visit(PermissionRequestHookInput hookInput)
     {
+        if (Settings.Events[PermissionRequest].SpecialLayoutEnabled is false)
+        {
+            return Visit(new StopHookInput()
+            {
+                TranscriptPath = hookInput.TranscriptPath,
+                AgentId = hookInput.AgentId,
+                AgentType = hookInput.AgentType,
+                LastAssistantMessage = $"O Claude solicitou permissão para executar \"{hookInput.ToolName}\"."
+            });
+        }
+
         var descriptionStr = string.IsNullOrWhiteSpace(hookInput.ToolInput.Description)
             ? string.Empty
             : XmlSafeFormatter.Format($"""<text hint-style="header">{hookInput.ToolInput.Description}</text>""");
@@ -126,6 +137,17 @@ $"""
 
     public XmlDocument Visit(PreToolUseHookInput hookInput)
     {
+        if (Settings.Events[PreToolUse].SpecialLayoutEnabled is false)
+        {
+            return Visit(new StopHookInput()
+            {
+                TranscriptPath = hookInput.TranscriptPath,
+                AgentId = hookInput.AgentId,
+                AgentType = hookInput.AgentType,
+                LastAssistantMessage = $"O Claude executou \"{hookInput.ToolName}\"."
+            });
+        }
+
         static string QuestionsEnumerableHelper(AskUserQuestionHookInputQuestion q)
         {
             if (q.MultiSelect)

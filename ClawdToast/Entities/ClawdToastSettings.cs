@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using ClawdToast.Contexts;
+using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -11,6 +12,7 @@ internal sealed class ClawdToastSettings
 
     public ClawdToastSettingsMinimumDuration MinimumDuration { get; set; } = new();
     public ClawdToastSettingsSound Sound { get; set; } = new();
+    public Dictionary<string, ClawdToastSettingsEvents> Events { get; set; } = new() { [PreToolUse] = new(), [PermissionRequest] = new() };
     public ClawdToastSettingsSubagent Subagent { get; set; } = new();
     public ClawdToastSettingsEasterEggs EasterEggs { get; set; } = new();
 
@@ -101,6 +103,11 @@ internal sealed class ClawdToastSettings
         public bool Loop { get; set; } = false;
     }
 
+    internal sealed class ClawdToastSettingsEvents
+    {
+        public bool SpecialLayoutEnabled { get; set; } = false;
+    }
+
     internal sealed class ClawdToastSettingsSubagent
     {
         public bool SubagentHooksEnabled { get; set; } = false;
@@ -113,10 +120,3 @@ internal sealed class ClawdToastSettings
 
     #endregion
 }
-
-[JsonSerializable(typeof(ClawdToastSettings))]
-[JsonSourceGenerationOptions(
-    PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
-    PropertyNameCaseInsensitive = true,
-    WriteIndented = true)]
-internal partial class ClawdToastSettingsJsonSerializerContext : JsonSerializerContext { }

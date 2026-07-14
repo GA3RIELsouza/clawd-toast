@@ -3,6 +3,7 @@ using ClawdToast.Entities.HookInput;
 using ClawdToast.Entities.TranscriptEntry;
 using ClawdToast.Entities.TranscriptEntry.System;
 using ClawdToast.Extensions;
+using ClawdToast.Visitors.Interfaces;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;

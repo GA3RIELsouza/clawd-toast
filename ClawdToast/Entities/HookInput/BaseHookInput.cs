@@ -1,4 +1,4 @@
-﻿using ClawdToast.Visitors;
+﻿using ClawdToast.Visitors.Interfaces;
 using System.Text.Json.Serialization;
 
 namespace ClawdToast.Entities.HookInput;
@@ -6,6 +6,7 @@ namespace ClawdToast.Entities.HookInput;
 [JsonPolymorphic(
     TypeDiscriminatorPropertyName = "hook_event_name",
     IgnoreUnrecognizedTypeDiscriminators = true)]
+[JsonDerivedType(typeof(ClawdToastInternalDoNotShowToastHookInput), "__CLAWD-TOAST-INTERNAL-DO-NOT-SHOW-TOAST")]
 [JsonDerivedType(typeof(StopHookInput), "Stop")]
 [JsonDerivedType(typeof(PermissionRequestHookInput), "PermissionRequest")]
 [JsonDerivedType(typeof(PreToolUseHookInput), "PreToolUse")]
