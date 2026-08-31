@@ -2,5 +2,10 @@
   <Folder Name="/Solution Items/">
     <File Path=".gitignore" />
   </Folder>
-  <Project Path="ClawdToast/ClawdToast.csproj" />
+  <Folder Name="/src/">
+    <Project Path="src/ClawdToast.Application/ClawdToast.Application.csproj" />
+    <Project Path="src/ClawdToast.Cli/ClawdToast.Cli.csproj" />
+    <Project Path="src/ClawdToast.Domain/ClawdToast.Domain.csproj" />
+    <Project Path="src/ClawdToast.Infrastructure/ClawdToast.Infrastructure.csproj" />
+  </Folder>
 </Solution>

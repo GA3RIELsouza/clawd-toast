@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<AssemblyName>clawd-toast</AssemblyName>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net11.0-windows10.0.22621.0</TargetFramework>
+		<LangVersion>preview</LangVersion>
+		<EnablePreviewFeatures>true</EnablePreviewFeatures>
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<PublishAot>true</PublishAot>
+		<PublishTrimmed>true</PublishTrimmed>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UseWindowsDesktopSdk>false</UseWindowsDesktopSdk>
+		<ApplicationIcon>Assets/appicon.ico</ApplicationIcon>
+		<WarningsAsErrors>true</WarningsAsErrors>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+		<DebugType>none</DebugType>
+		<DebugSymbols>false</DebugSymbols>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
+		<PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.11" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\ClawdToast.Application\ClawdToast.Application.csproj" />
+	  <ProjectReference Include="..\ClawdToast.Infrastructure\ClawdToast.Infrastructure.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="Assets/icon16.png" LogicalName="ClawdToast.icon16.png" />
+		<EmbeddedResource Include="Assets/nuke.png" LogicalName="nuke.png" />
+	</ItemGroup>
+</Project>
