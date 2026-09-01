@@ -8,7 +8,6 @@ namespace ClawdToast.Infrastructure.Interop;
 internal static partial class Win32Interop
 {
     public const int SW_RESTORE = 9;
-    public const int ASFW_ANY = -1;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct PROCESS_BASIC_INFORMATION
@@ -72,9 +71,12 @@ internal static partial class Win32Interop
         uint idAttachTo,
         [MarshalAs(UnmanagedType.Bool)] bool fAttach);
 
-    [LibraryImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool AllowSetForegroundWindow(int dwProcessId);
+    [LibraryImport("user32.dll", EntryPoint = "FindWindowExW")]
+    public static partial nint FindWindowEx(
+        nint hWndParent,
+        nint hWndChildAfter,
+        nint lpszClass,
+        nint lpszWindow);
 
     [LibraryImport("user32.dll", EntryPoint = "GetWindowTextW", StringMarshalling = StringMarshalling.Utf16)]
     public static partial int GetWindowText(nint hWnd, Span<char> lpString, int nMaxCount);

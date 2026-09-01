@@ -59,10 +59,10 @@ public sealed partial class FocusService(ILogger<FocusService> logger) : IFocusS
 
     #endregion
 
+    private const int MaxAncestorDepth = 8;
+
     public bool TryFocusWindow(string? sessionTitle)
     {
-        const int MaxDepth = 8;
-
         _ = FreeConsole();
 
         if (TryFocusWindowsTerminalTab(sessionTitle)) return true;
@@ -70,7 +70,7 @@ public sealed partial class FocusService(ILogger<FocusService> logger) : IFocusS
         var currentProcess = Process.GetCurrentProcess();
         var currentDepth = 0;
 
-        while (currentProcess is not null && currentDepth < MaxDepth)
+        while (currentProcess is not null && currentDepth < MaxAncestorDepth)
         {
             currentProcess = GetParentProcess(currentProcess);
             if (currentProcess is null) break;
@@ -104,10 +104,9 @@ public sealed partial class FocusService(ILogger<FocusService> logger) : IFocusS
         {
             consoleHandle = GetConsoleWindow();
 
-            if (!IsUsableWindow(consoleHandle))
-            {
-                _ = FreeConsole();
-            }
+            // The handle stays valid after detaching, and a process can only be attached to a
+            // single console: keeping it would make every later AttachConsole call fail.
+            _ = FreeConsole();
         }
 
         try
@@ -138,6 +137,8 @@ public sealed partial class FocusService(ILogger<FocusService> logger) : IFocusS
 
     #region Windows Terminal tab
 
+    private sealed record TabMatch(nint Window, IUIAutomationSelectionItemPattern Tab);
+
     private bool TryFocusWindowsTerminalTab(string? sessionTitle)
     {
         if (string.IsNullOrWhiteSpace(sessionTitle))
@@ -156,55 +157,45 @@ public sealed partial class FocusService(ILogger<FocusService> logger) : IFocusS
                 return false;
             }
 
-            var matchCount = 0;
-            var matchedWindow = nint.Zero;
-            IUIAutomationSelectionItemPattern? matchedTab = null;
+            var terminalWindows = GetWindowsTerminalWindows();
 
-            foreach (var terminalProcess in GetWindowsTerminalProcesses())
+            if (terminalWindows.Count == 0)
             {
-                nint terminalWindow;
-
-                try
-                {
-                    terminalWindow = terminalProcess.MainWindowHandle;
-                }
-                catch
-                {
-                    continue;
-                }
-
-                if (!IsUsableWindow(terminalWindow)) continue;
-
-                var tab = FindMatchingTab(automation, terminalWindow, sessionTitle, ref matchCount);
-
-                if (tab is null) continue;
-
-                matchedWindow = terminalWindow;
-                matchedTab = tab;
+                LogTabSelectionSkipped(logger, "no Windows Terminal window is available");
+                return false;
             }
 
-            if (matchCount == 0)
+            var matches = new List<TabMatch>();
+
+            foreach (var terminalWindow in terminalWindows)
+            {
+                matches.AddRange(FindMatchingTabs(automation, terminalWindow, sessionTitle));
+            }
+
+            if (matches.Count == 0)
             {
                 LogTabSelectionSkipped(logger, "no Windows Terminal tab matches the session title");
                 return false;
             }
 
-            if (matchCount > 1 || matchedTab is null)
+            var match = SelectBestMatch(matches);
+
+            if (match is null)
             {
-                LogTabSelectionSkipped(logger, "more than one Windows Terminal tab matches the session title");
+                LogTabSelectionSkipped(logger, "more than one Windows Terminal tab has the session title");
                 return false;
             }
 
-            matchedTab.Select();
+            match.Tab.Select();
 
-            if (!ForceForegroundWindow(matchedWindow))
+            if (!ForceForegroundWindow(match.Window))
             {
                 LogFocusFailed(logger);
                 return false;
             }
 
             LogTabSelected(logger, sessionTitle);
-            LogFocusSucceeded(logger, GetWindowTitle(matchedWindow) ?? "<unknown>", "WindowsTerminal");
+            LogFocusSucceeded(logger, GetWindowTitle(match.Window) ?? "<unknown>", "WindowsTerminal");
 
             return true;
         }
@@ -215,11 +206,27 @@ public sealed partial class FocusService(ILogger<FocusService> logger) : IFocusS
         }
     }
 
-    private static IUIAutomationSelectionItemPattern? FindMatchingTab(
+    /// <summary>
+    /// Picks the single tab to select, disambiguating identically titled tabs by the window that
+    /// belongs to one of the ancestors of the current process.
+    /// </summary>
+    private static TabMatch? SelectBestMatch(List<TabMatch> matches)
+    {
+        if (matches.Count == 1) return matches[0];
+
+        var ancestorProcessIds = GetAncestorProcessIds();
+
+        var ownedMatches = matches
+            .Where(match => ancestorProcessIds.Contains(GetWindowProcessId(match.Window)))
+            .ToList();
+
+        return ownedMatches.Count == 1 ? ownedMatches[0] : null;
+    }
+
+    private static List<TabMatch> FindMatchingTabs(
         IUIAutomation automation,
         nint windowHandle,
-        string sessionTitle,
-        ref int matchCount)
+        string sessionTitle)
     {
         automation.ElementFromHandle(windowHandle, out var window);
         automation.CreateTrueCondition(out var condition);
@@ -227,7 +234,7 @@ public sealed partial class FocusService(ILogger<FocusService> logger) : IFocusS
         window.FindAll(UIAutomationInterop.TreeScope_Descendants, condition, out var elements);
         elements.GetLength(out var length);
 
-        IUIAutomationSelectionItemPattern? match = null;
+        var matches = new List<TabMatch>();
 
         for (var index = 0; index < length; index++)
         {
@@ -238,9 +245,7 @@ public sealed partial class FocusService(ILogger<FocusService> logger) : IFocusS
 
             element.GetCurrentName(out var name);
 
-            if (!IsTitleMatch(name, sessionTitle)) continue;
-
-            matchCount++;
+            if (!IsExactTitleMatch(name, sessionTitle)) continue;
 
             element.GetCurrentPatternAs(
                 UIAutomationInterop.UIA_SelectionItemPatternId,
@@ -249,32 +254,98 @@ public sealed partial class FocusService(ILogger<FocusService> logger) : IFocusS
 
             if (patternPointer == nint.Zero) continue;
 
-            match = (IUIAutomationSelectionItemPattern)UIAutomationInterop.FromComPointer(patternPointer);
+            var pattern = (IUIAutomationSelectionItemPattern)UIAutomationInterop.FromComPointer(patternPointer);
+
+            matches.Add(new TabMatch(windowHandle, pattern));
         }
 
-        return match;
+        return matches;
     }
 
-    private static IEnumerable<Process> GetWindowsTerminalProcesses()
-        => Process.GetProcesses()
-            .Where(process => GetProcessName(process).StartsWith("WindowsTerminal", StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// Enumerates every top level window owned by a Windows Terminal process.
+    /// <para>
+    /// Window glomming lets a single process host several windows, so
+    /// <see cref="Process.MainWindowHandle"/> cannot be used to reach all of them.
+    /// </para>
+    /// </summary>
+    private static List<nint> GetWindowsTerminalWindows()
+    {
+        var terminalProcessIds = GetWindowsTerminalProcessIds();
+        var windows = new List<nint>();
 
-    private static bool IsTitleMatch(string? tabName, string sessionTitle)
-        => !string.IsNullOrWhiteSpace(tabName)
-            && tabName.Contains(sessionTitle.Trim(), StringComparison.OrdinalIgnoreCase);
+        if (terminalProcessIds.Count == 0) return windows;
+
+        var windowHandle = nint.Zero;
+
+        while ((windowHandle = FindWindowEx(nint.Zero, windowHandle, nint.Zero, nint.Zero)) != nint.Zero)
+        {
+            if (!IsUsableWindow(windowHandle)) continue;
+            if (!terminalProcessIds.Contains(GetWindowProcessId(windowHandle))) continue;
+
+            windows.Add(windowHandle);
+        }
+
+        return windows;
+    }
+
+    private static HashSet<uint> GetWindowsTerminalProcessIds()
+    {
+        var processIds = new HashSet<uint>();
+
+        foreach (var process in Process.GetProcesses())
+        {
+            using (process)
+            {
+                if (GetProcessName(process).StartsWith("WindowsTerminal", StringComparison.OrdinalIgnoreCase))
+                {
+                    processIds.Add((uint)process.Id);
+                }
+            }
+        }
+
+        return processIds;
+    }
+
+    private static HashSet<uint> GetAncestorProcessIds()
+    {
+        var processIds = new HashSet<uint>();
+        var currentProcess = Process.GetCurrentProcess();
+        var currentDepth = 0;
+
+        while (currentProcess is not null && currentDepth < MaxAncestorDepth)
+        {
+            currentProcess = GetParentProcess(currentProcess);
+            if (currentProcess is null) break;
+
+            processIds.Add((uint)currentProcess.Id);
+            currentDepth++;
+        }
+
+        return processIds;
+    }
+
+    private static uint GetWindowProcessId(nint hWnd)
+    {
+        _ = GetWindowThreadProcessId(hWnd, out var processId);
+
+        return processId;
+    }
+
+    private static bool IsExactTitleMatch(string? tabName, string sessionTitle)
+        => tabName?.Trim().Equals($"✳ {sessionTitle}", StringComparison.OrdinalIgnoreCase) == true;
 
     #endregion
 
     private static bool ForceForegroundWindow(nint hWnd)
     {
-        if (IsIconic(hWnd))
-        {
-            _ = ShowWindow(hWnd, SW_RESTORE);
-        }
+        if (GetForegroundWindow() == hWnd) return true;
 
-        _ = AllowSetForegroundWindow(ASFW_ANY);
+        RestoreIfMinimized(hWnd);
 
-        if (SetForegroundWindow(hWnd) && GetForegroundWindow() == hWnd) return true;
+        _ = SetForegroundWindow(hWnd);
+
+        if (WaitForForeground(hWnd)) return true;
 
         var foregroundThreadId = GetWindowThreadProcessId(GetForegroundWindow(), out _);
         var targetThreadId = GetWindowThreadProcessId(hWnd, out _);
@@ -290,16 +361,44 @@ public sealed partial class FocusService(ILogger<FocusService> logger) : IFocusS
 
         try
         {
-            _ = ShowWindow(hWnd, SW_RESTORE);
+            RestoreIfMinimized(hWnd);
+
             _ = SetForegroundWindow(hWnd);
 
-            return GetForegroundWindow() == hWnd;
+            return WaitForForeground(hWnd);
         }
         finally
         {
             if (attachedToTarget) _ = AttachThreadInput(currentThreadId, targetThreadId, false);
             if (attachedToForeground) _ = AttachThreadInput(currentThreadId, foregroundThreadId, false);
         }
+    }
+
+    /// <summary>
+    /// Restores the window only when it is minimized: <c>SW_RESTORE</c> on a maximized window
+    /// un-maximizes it, which would drop a full screen terminal out of full screen.
+    /// </summary>
+    private static void RestoreIfMinimized(nint hWnd)
+    {
+        if (IsIconic(hWnd)) _ = ShowWindow(hWnd, SW_RESTORE);
+    }
+
+    /// <summary>
+    /// Waits for the asynchronous foreground switch to settle before reporting a failure.
+    /// </summary>
+    private static bool WaitForForeground(nint hWnd)
+    {
+        const int Attempts = 10;
+        const int DelayMilliseconds = 15;
+
+        for (var attempt = 0; attempt < Attempts; attempt++)
+        {
+            if (GetForegroundWindow() == hWnd) return true;
+
+            Thread.Sleep(DelayMilliseconds);
+        }
+
+        return false;
     }
 
     private static string GetProcessName(Process process)
